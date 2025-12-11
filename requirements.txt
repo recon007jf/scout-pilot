@@ -1,0 +1,15 @@
+gspread
+gdown==5.1.0
+google-api-python-client
+google-auth
+python-dotenv
+requests
+google-generativeai
+streamlit
+dnspython
+cloudscraper
+extra-streamlit-components
+google-cloud-storage
+gcsfs
+supabase
+gdown

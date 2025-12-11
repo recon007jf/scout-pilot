@@ -1,0 +1,49 @@
+# Scout Dashboard - Walkthrough
+
+## Overview
+The **Scout Dashboard** is now live on Google Cloud Run! It provides a secure, "premium" interface for the sales team to view lead intelligence, export data, and retry failed generations.
+
+## Access
+- **URL:** [https://scout-dashboard-283427197752.us-central1.run.app](https://scout-dashboard-283427197752.us-central1.run.app)
+- **Password:** `scout2025`
+- **Compatibility:** Works on Desktop and Mobile.
+
+## Features
+
+### 1. The "Sisyphus" Interface
+- **Dark Mode Aesthetic:** Deep navy background with high-contrast text.
+- **Unified Cards:** Lead details are presented in clean, expandable cards.
+- **Status Badges:** Quick visual indicators for DISC types and lead status.
+
+### 2. Lead Intelligence
+Expand any row to see:
+- **Dossier Summary:** DISC type, Communication Style, Hooks, and Pain Points (formatted as clean text).
+- **Draft Email:** A pre-written cold email tailored to the lead's psychology.
+- **LinkedIn Profile:** Direct link and profile photo (if available).
+
+### 3. "Retry" Generation
+If a lead is missing a Draft Email (due to API rate limits):
+1. Expand the lead's card.
+2. Click the **"🔄 Retry Generation"** button.
+3. The AI will re-process just that lead and refresh the page automatically.
+
+### 4. Data Export
+- **Export All:** Click the sidebar button to download the entire dataset as CSV.
+- **Export Single:** Click "⬇️ Download CSV" inside any card to get just that lead's data.
+
+### 5. Bulk Actions & Integrity
+- **Fix Incomplete Leads:** A sidebar button to auto-regenerate all leads missing data or emails.
+- **Integrity Check:** A sidebar button to audit the database, flagging leads where the current role on LinkedIn doesn't match the target firm.
+
+### 6. Manual Overrides
+- **Edit Data:** Expand any lead card and scroll to "Manual Updates" to fix Email Addresses or LinkedIn URLs directly.
+- **Email Guessing:** The system now auto-guesses missing emails (labeled with `[guess]`) and provides a reason.
+
+## Deployment Details
+- **Platform:** Google Cloud Run (Serverless)
+- **Security:** Publicly accessible URL, protected by application-level password.
+- **Updates:** To deploy changes, run `./deploy.sh` from your terminal.
+
+## Troubleshooting
+- **"Forbidden" Error:** If you see this, it means you are accessing an old cached version. **Hard Refresh** (Cmd+Shift+R) or open in Incognito mode.
+- **Missing Data:** Use the "Retry" button. If it persists, check the Google Sheet for valid LinkedIn URLs.

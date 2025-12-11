@@ -1,0 +1,83 @@
+[
+    {
+        "firm": "Alliant",
+        "city": "Seattle",
+        "state": "WA",
+        "person_name": "Kevin Overbey",
+        "role": "President, Employee Benefits",
+        "email_pattern": "koverbey@alliant.com",
+        "region": "West"
+    },
+    {
+        "firm": "Alliant",
+        "city": "Unknown",
+        "state": "West",
+        "person_name": "David Osterhaus",
+        "role": "Sr. EVP, Strategic Growth",
+        "email_pattern": "dosterhaus@alliant.com",
+        "region": "West"
+    },
+    {
+        "firm": "Lockton",
+        "city": "San Diego",
+        "state": "CA",
+        "person_name": "Michelle McGrath",
+        "role": "EVP",
+        "email_pattern": "mmcgrath@lockton.com",
+        "region": "West"
+    },
+    {
+        "firm": "Lockton",
+        "city": "Unknown",
+        "state": "West",
+        "person_name": "Timothy Noonan",
+        "role": "President, Pacific Series",
+        "email_pattern": "tnoonan@lockton.com",
+        "region": "West"
+    },
+    {
+        "firm": "Gallagher",
+        "city": "Glendale",
+        "state": "CA",
+        "person_name": "Neil Parton",
+        "role": "Area President",
+        "email_pattern": "neil_parton@ajg.com",
+        "region": "West"
+    },
+    {
+        "firm": "Gallagher",
+        "city": "San Francisco",
+        "state": "CA",
+        "person_name": "Sarah Smith",
+        "role": "Area VP",
+        "email_pattern": "sarah_smith@ajg.com",
+        "region": "West"
+    },
+    {
+        "firm": "HUB International",
+        "city": "Los Angeles",
+        "state": "CA",
+        "person_name": "Andrew Forchelli",
+        "role": "President, HUB California",
+        "email_pattern": "andrew.forchelli@hubinternational.com",
+        "region": "West"
+    },
+    {
+        "firm": "HUB International",
+        "city": "San Diego",
+        "state": "CA",
+        "person_name": "Maggie Osburn",
+        "role": "Senior Vice President",
+        "email_pattern": "maggie.osburn@hubinternational.com",
+        "region": "West"
+    },
+    {
+        "firm": "USI",
+        "city": "Unknown",
+        "state": "West",
+        "person_name": "Anthony Manganello",
+        "role": "EVP, EB Practice Leader",
+        "email_pattern": "anthony.manganello@usi.com",
+        "region": "West"
+    }
+]

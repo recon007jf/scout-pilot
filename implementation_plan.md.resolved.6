@@ -1,0 +1,38 @@
+# Implementation Plan - The Bernays Protocol
+
+## Goal
+Upgrade the "Deep Recon" module to move beyond basic personality matching (DISC) and identify the **unconscious psychological driver** of each prospect. This is the "Bernays Protocol".
+
+## Core Concept: The 4 Hidden Drivers
+We will analyze every piece of intel to classify the broker into one of four archetypes:
+1.  **The King (Control):** Wants to build their own empire. Hates being dependent on big carriers (BUCA).
+    *   *Keywords:* "Custom", "Independent", "Self-funded", "Architecture".
+2.  **The Shepherd (Safety):** Wants to protect their clients from risk. Fears change/disruption.
+    *   *Keywords:* "Stewardship", "Protection", "Compliance", "Trusted Advisor".
+3.  **The Star (Status):** Wants to be seen as a thought leader/innovator.
+    *   *Keywords:* "Award winner", "Speaker", "Innovation", "Disruptor".
+4.  **The Merchant (Profit):** Purely transactional. Wants the best margin/lowest cost.
+    *   *Keywords:* "ROI", "Bottom line", "Cost containment", "Savings".
+
+## Proposed Changes
+
+### 1. Expand Intel Gathering ([recon_agent.py](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/recon_agent.py))
+We need more signal to find these deep drivers. We will add specific Serper searches:
+- **Podcasts/Interviews:** `site:youtube.com OR site:spotify.com "Name" "Firm" interview`
+## Recent Changes
+
+#### [MODIFY] [recon_agent.py](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/recon_agent.py)
+- Implemented **Bernays Protocol**:
+    - Expanded [gather_intel](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/recon_agent.py#78-114) to search for Podcasts, Interviews, and News.
+    - Updated [analyze_lead](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/recon_agent.py#115-160) to identify 4 Archetypes: Controller, Social Climber, Guardian, Analyst.
+    - Updated [write_email](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/recon_agent.py#161-184) to use Archetype-specific strategies and hooks.
+    - Added extraction of **Podcast Name** and **URL**.
+    - Enforced personalized salutations ("Hi {First Name}").
+    - Added **Archetype Evidence** field to justify psychological profiling with quotes/behavior.
+    - Hardened JSON parsing logic.
+
+#### [MODIFY] [app.py](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/app.py)
+- Replaced DISC badge with **Archetype Badge** (Color-coded).
+- Added **Archetype Legend** to the sidebar.
+- Added **Podcast Host** section to lead details.
+- Improved Login UX (Enter key submission).

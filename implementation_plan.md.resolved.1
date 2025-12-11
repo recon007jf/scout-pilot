@@ -1,0 +1,52 @@
+# Point C Scout - Implementation Plan
+
+## Goal Description
+Build "Point C Scout," a B2B Sales Intelligence Tool designed for simplicity and financial safety. The tool automates lead discovery, profiling, and drafting using a single-tenant architecture hosted on Cloud Run with Google Sheets as the database.
+
+## Architecture & Safety
+- **Database:** Google Sheets (Master Sheet: Leads, Logs, DNC_List) via `st.connection`.
+- **Financial Safety (Circuit Breakers):**
+    - `max_retries=3` on API calls.
+    - Daily Soft Cap: $15 (Alert).
+    - Monthly Hard Cap: $200 (Stop Processing).
+- **Security:** Single-Tenant, No PHI allowed.
+
+## Proposed Changes
+
+### Project Structure
+- [app.py](file:///Users/josephlf/.gemini/antigravity/brain/aac4f1c5-a379-4f0d-9e9e-fe1246cf2bd8/app.py): Main Streamlit application entry point.
+- [requirements.txt](file:///Users/josephlf/.gemini/antigravity/brain/aac4f1c5-a379-4f0d-9e9e-fe1246cf2bd8/requirements.txt): Python dependencies.
+- `modules/`: Contains the 5 core logic modules.
+    - [hunter.py](file:///Users/josephlf/.gemini/antigravity/brain/aac4f1c5-a379-4f0d-9e9e-fe1246cf2bd8/modules/hunter.py): Discovery logic (Serper, News).
+    - [profiler.py](file:///Users/josephlf/.gemini/antigravity/brain/aac4f1c5-a379-4f0d-9e9e-fe1246cf2bd8/modules/profiler.py): Analysis logic (Gemini, Regulatory Focus Theory).
+    - [ghostwriter.py](file:///Users/josephlf/.gemini/antigravity/brain/aac4f1c5-a379-4f0d-9e9e-fe1246cf2bd8/modules/ghostwriter.py): Drafting logic (Gemini, RAG).
+    - [command_center.py](file:///Users/josephlf/.gemini/antigravity/brain/aac4f1c5-a379-4f0d-9e9e-fe1246cf2bd8/modules/command_center.py): UI components (Card View vs. Table View).
+    - [circuit_breaker.py](file:///Users/josephlf/.gemini/antigravity/brain/aac4f1c5-a379-4f0d-9e9e-fe1246cf2bd8/test_circuit_breaker.py): Safety and cost management.
+- `utils/`: Helper functions.
+    - [gsheets.py](file:///Users/josephlf/.gemini/antigravity/brain/aac4f1c5-a379-4f0d-9e9e-fe1246cf2bd8/utils/gsheets.py): Database interactions.
+    - [msgraph.py](file:///Users/josephlf/.gemini/antigravity/brain/aac4f1c5-a379-4f0d-9e9e-fe1246cf2bd8/utils/msgraph.py): Outlook integration.
+    - [serper.py](file:///Users/josephlf/.gemini/antigravity/brain/aac4f1c5-a379-4f0d-9e9e-fe1246cf2bd8/utils/serper.py): Search API wrapper.
+    - `email_templates.py`: HTML generators for Smart Briefing.
+- `config/`: Configuration and settings.
+
+## UI/UX Specifications
+### Command Center
+- **Closer View (The Executive Suite):** Card-based interface for Andrew.
+    - Sidebar: Scout Co-Pilot Chat.
+    - Main: "Daily Stack" of Lead Cards (Name, Title, Badges, Editable Draft, Approve/Reject buttons).
+- **Scout View (Team Interface):** Data table for bulk management.
+    - `st.dataframe` with filtering and editing.
+    - Bulk Export to CSV.
+
+### Smart Briefing Email
+- **Design:** "Synthetic LinkedIn Post".
+- **Structure:** Header img, LinkedIn-style post box (Lead snippet), Strategy box (Blue), Footer img.
+
+## Verification Plan
+### Automated Tests
+- Unit tests for Circuit Breaker logic (mocking API calls to verify caps).
+- Integration tests for Google Sheets connection (verify read/write).
+
+### Manual Verification
+- **Circuit Breaker Test:** Manually trigger the daily cap limit to verify alert generation.
+- **End-to-End Flow:** Run a "Sniper Mode" search -> Profile -> Draft -> Approve (Mock push).

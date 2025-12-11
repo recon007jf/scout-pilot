@@ -1,0 +1,38 @@
+# Point C Scout - Implementation Plan
+
+## Goal Description
+Build "Point C Scout," a B2B Sales Intelligence Tool designed for simplicity and financial safety. The tool automates lead discovery, profiling, and drafting using a single-tenant architecture hosted on Cloud Run with Google Sheets as the database.
+
+## Architecture & Safety
+- **Database:** Google Sheets (Master Sheet: Leads, Logs, DNC_List) via `st.connection`.
+- **Financial Safety (Circuit Breakers):**
+    - `max_retries=3` on API calls.
+    - Daily Soft Cap: $15 (Alert).
+    - Monthly Hard Cap: $200 (Stop Processing).
+- **Security:** Single-Tenant, No PHI allowed.
+
+## Proposed Changes
+
+### Project Structure
+- `app.py`: Main Streamlit application entry point.
+- `requirements.txt`: Python dependencies.
+- `modules/`: Contains the 5 core logic modules.
+    - `hunter.py`: Discovery logic (Serper, News).
+    - `profiler.py`: Analysis logic (Gemini, Regulatory Focus Theory).
+    - `ghostwriter.py`: Drafting logic (Gemini, RAG).
+    - `command_center.py`: UI components.
+    - `circuit_breaker.py`: Safety and cost management.
+- `utils/`: Helper functions.
+    - `gsheets.py`: Database interactions.
+    - `msgraph.py`: Outlook integration.
+    - `serper.py`: Search API wrapper.
+- `config/`: Configuration and settings.
+
+## Verification Plan
+### Automated Tests
+- Unit tests for Circuit Breaker logic (mocking API calls to verify caps).
+- Integration tests for Google Sheets connection (verify read/write).
+
+### Manual Verification
+- **Circuit Breaker Test:** Manually trigger the daily cap limit to verify alert generation.
+- **End-to-End Flow:** Run a "Sniper Mode" search -> Profile -> Draft -> Approve (Mock push).

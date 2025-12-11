@@ -1,0 +1,151 @@
+# Tasks
+
+- [x] Create project files
+    - [x] Create leads.csv
+    - [x] Create agent.py
+    - [x] Create requirements.txt
+- [x] Install dependencies
+- [x] Verify credentials and run script
+    - [x] Credentials format check passed
+    - [x] Deploy application (Success: https://scout-dashboard-283427197752.us-central1.run.app)
+    - [x] Fix Access Issues (Made Public + Password Protected)
+    - [x] Deploy application (Success: https://scout-dashboard-283427197752.us-central1.run.app)
+    - [x] Fix Access Issues (Made Public + Password Protected)
+    - [x] Verify Password Protection on Cloud Run (Confirmed Live)
+- [x] Final Polish of UI
+    - [x] Implement "Retry" button for failed leads
+    - [x] Verify mobile responsiveness (Streamlit default)
+- [x] Implement Bernays Protocol (Deep Intelligence)
+    - [x] Expand [recon_agent.py](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/recon_agent.py) gathering (Podcasts, News, Speaking)
+    - [x] Update [analyze_lead](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/recon_agent.py#132-179) with Archetype Prompt (Controller, Social Climber, Guardian, Analyst)
+    - [x] Update [app.py](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/app.py) to display Archetype Badges & Legend
+    - [x] Verify on test lead
+- [x] Add Podcast Details
+    - [x] Update [recon_agent.py](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/recon_agent.py) to extract & save Podcast Name/URL
+    - [x] Update [app.py](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/app.py) to display "🎙️ Podcast Host" section
+- [x] Personalize Email Salutations
+    - [x] Update [write_email](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/recon_agent.py#180-203) to accept `first_name`
+    - [x] Update prompt to enforce "Hi {first_name}"
+    - [x] Update [process_single_lead](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/recon_agent.py#237-331) to pass name
+- [x] Improve Login UX
+    - [x] Wrap login inputs in `st.form` to enable "Enter" key submission
+- [x] Add Archetype Evidence
+    - [x] Update [analyze_lead](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/recon_agent.py#132-179) to extract evidence/quotes
+    - [x] Update [process_single_lead](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/recon_agent.py#237-331) to save evidence to dossier
+    - [x] Regenerate all leads with new evidence
+- [x] Beautify Dossier Display
+    - [x] Parse dossier text into structured data
+    - [x] Render with custom HTML/CSS card design
+- [x] Implement Smart Retry Logic
+    - [x] Update [recon_agent.py](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/recon_agent.py) with exponential backoff for API calls
+    - [x] Handle 429 errors gracefully
+- [x] Implement Budget Safety Guard
+    - [x] Add `SAFETY_LIMIT` constant to [recon_agent.py](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/recon_agent.py)
+    - [x] Enforce max leads per run (default 50)
+- [x] Add Bulk Regeneration UI
+    - [x] Add "Bulk Actions" section to Sidebar
+    - [x] Implement "Regenerate Incomplete Leads" button (Batch process)
+- [x] Implement Email Guessing & Explanation
+    - [x] Add [guess_email_logic](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/recon_agent.py#204-236) to [recon_agent.py](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/recon_agent.py)
+    - [x] Update [process_single_lead](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/recon_agent.py#237-331) to populate missing emails with Guess + Reason
+    - [x] Beautify display in [app.py](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/app.py) (Bold Email, Italic Reason)
+- [x] Implement Manual Email Override
+    - [x] Add "Edit Email" input field to [app.py](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/app.py) lead details
+    - [x] Implement update logic to save manual entry to Google Sheet
+- [x] Implement Manual LinkedIn Override
+    - [x] Update [app.py](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/app.py) to include "Edit LinkedIn" field
+    - [x] Combine with Email Edit for a unified "Manual Updates" form
+    - [x] Create .gitignore
+    - [x] Initialize repo and commit
+
+- [ ] Integrate Serper API
+    - [x] Install python-dotenv
+    - [x] Create .env for API key
+    - [x] Install python-dotenv
+    - [x] Create .env for API key
+    - [x] Update agent.py with search logic (Query, Extraction, Fallback)
+    - [x] Run script (Limit 5 leads)
+- [x] Process all leads
+    - [x] Remove limit in agent.py
+    - [x] Run script for full list
+- [ ] Add LinkedIn Search
+    - [x] Update process_lead with LinkedIn query
+    - [x] Update write_to_google_sheet with new column
+    - [x] Run script to overwrite data
+- [ ] Refine LinkedIn Search
+    - [x] Update query to be broader (remove strict quotes)
+    - [x] Re-run script (Success: Improved results)
+- [x] Save progress to GitHub
+    - [x] Commit and push new features
+- [ ] Implement Email Validation
+    - [x] Add validation logic (length check, name matching)
+    - [x] Filter generic/junk emails
+    - [x] Re-run script to clean up data
+- [ ] Refine Email Search
+    - [x] Remove "Guessing" logic (Strict "Not Found")
+    - [x] Add LinkedIn X-Ray search (site:linkedin.com/in/... "@")
+    - [x] Re-run script (Success: X-Ray active)
+- [ ] Build Deep Recon Module
+    - [x] Update requirements (google-generativeai)
+    - [x] Update .env with Gemini Key
+    - [x] Create recon_agent.py (Serper + Gemini Analyst + Gemini Copywriter)
+    - [x] Run on first 3 leads (Success: Dossiers & Drafts generated)
+- [ ] Refine Deep Recon Output
+    - [x] Format Dossier Summary as readable text (not JSON)
+    - [x] Run on next batch of leads (Success: Readable dossiers)
+- [ ] Build Scout Dashboard
+    - [x] Update requirements (streamlit)
+    - [x] Create app.py (Streamlit UI)
+    - [x] Implement Google Sheets connection
+    - [x] Add "Export to CSV" features
+    - [x] Style with custom CSS
+    - [x] Launch Dashboard (http://localhost:8502)
+- [ ] Redesign Scout Dashboard UI
+    - [x] Analyze example URLs (Crypto Table aesthetic)
+    - [x] Create "Sisyphus" CSS (Deep Navy, Rating Badges, Pill Labels)
+    - [x] Update app.py to use "Sisyphus" layout
+    - [x] Add "Quick Actions" (Export/View)
+- [ ] Add LinkedIn Profile Photos
+    - [x] Update recon_agent.py to search for profile images
+    - [x] Update Google Sheet with "Profile Image" column
+    - [x] Update app.py to display photos in the dashboard
+    - [x] Update CSS for image avatars
+- [ ] Refine Dashboard Layout
+    - [x] Merge "Row" and "Details" visually (remove gaps/borders)
+    - [x] Update CSS to create a unified "Card" look
+    - [x] Move actions inside the details area if needed
+- [ ] Clean Up Dossier Formatting
+    - [x] Create fix_dossier_format.py (JSON -> Text, Strip Markdown)
+    - [x] Run cleanup script on all rows
+    - [x] Update recon_agent.py to enforce plain text output
+- [ ] Debug & Fix Data Issues
+    - [x] Fix agent.py (saving Title instead of URL?)
+    - [x] Update recon_agent.py Prompt (Ignore "Welcome user" / login text)
+    - [x] Re-run Recon for Kevin Overbey (and full list) - DONE (Some 429 errors on emails)
+- [ ] Refine Search Accuracy
+    - [ ] Update search queries to include "Present" to target current role
+    - [x] Update analysis prompt to explicitly filter for target firm
+- [x] Implement Automated Data Integrity Audit
+    - [x] Create [integrity_check.py](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/integrity_check.py) to re-verify all leads
+    - [x] Logic: Compare "Target Firm" vs. "Extracted Current Firm" from LinkedIn
+    - [x] Auto-flag mismatches for review or auto-regenerate
+    - [x] Add "Run Integrity Check" to Dashboard Sidebar
+- [ ] Implement CSV Import Feature
+    - [ ] Add "Upload CSV" widget to Sidebar
+    - [ ] Logic: Validate columns, clean data, append to Google Sheet
+    - [ ] **Smart Enrichment:** Update [recon_agent.py](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/recon_agent.py) to auto-find LinkedIn URL if missing
+    - [ ] Ensure "Fix Incomplete Leads" triggers full recon (Search -> Intel -> Dossier -> Email)
+- [ ] **Discuss: Microsoft Azure Integration**
+    - [ ] Analyze pitfalls: OAuth2 complexity, Token management, Permissions (`Mail.ReadWrite`)
+    - [ ] Discuss deployment challenges (Redirect URIs, Secrets)
+    - [ ] Evaluate UX impact (Login flow in Streamlit)
+
+## Next Steps (Tomorrow)
+- [ ] Review final list for any missing emails (due to rate limits)
+- [ ] Implement "Retry" button in Dashboard for failed items
+- [ ] Final Polish of UI - DONE (Some 429 errors on emails)
+
+## Next Steps (Tomorrow)
+- [ ] Review final list for any missing emails (due to rate limits)
+- [ ] Implement "Retry" button in Dashboard for failed items
+- [ ] Final Polish of UI

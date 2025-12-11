@@ -1,0 +1,11 @@
+.git/
+.gitignore
+__pycache__/
+venv/
+env/
+
+*.zip
+*.tar.gz
+.DS_Store
+command_center_demo_*.webp
+uploaded_image_*

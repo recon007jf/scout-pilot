@@ -1,0 +1,55 @@
+# Implementation Plan - The Bernays Protocol
+
+## Goal
+Upgrade the "Deep Recon" module to move beyond basic personality matching (DISC) and identify the **unconscious psychological driver** of each prospect. This is the "Bernays Protocol".
+
+## Core Concept: The 4 Hidden Drivers
+We will analyze every piece of intel to classify the broker into one of four archetypes:
+1.  **The King (Control):** Wants to build their own empire. Hates being dependent on big carriers (BUCA).
+    *   *Keywords:* "Custom", "Independent", "Self-funded", "Architecture".
+2.  **The Shepherd (Safety):** Wants to protect their clients from risk. Fears change/disruption.
+    *   *Keywords:* "Stewardship", "Protection", "Compliance", "Trusted Advisor".
+3.  **The Star (Status):** Wants to be seen as a thought leader/innovator.
+    *   *Keywords:* "Award winner", "Speaker", "Innovation", "Disruptor".
+4.  **The Merchant (Profit):** Purely transactional. Wants the best margin/lowest cost.
+    *   *Keywords:* "ROI", "Bottom line", "Cost containment", "Savings".
+
+## Proposed Changes
+
+### 1. Expand Intel Gathering ([recon_agent.py](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/recon_agent.py))
+We need more signal to find these deep drivers. We will add specific Serper searches:
+- **Podcasts/Interviews:** `site:youtube.com OR site:spotify.com "Name" "Firm" interview`
+## Recent Changes
+
+#### [MODIFY] [recon_agent.py](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/recon_agent.py)
+- Implemented **Bernays Protocol**:
+    - Expanded [gather_intel](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/recon_agent.py#94-131) to search for Podcasts, Interviews, and News.
+    - Updated [analyze_lead](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/recon_agent.py#132-179) to identify 4 Archetypes: Controller, Social Climber, Guardian, Analyst.
+    - Updated [write_email](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/recon_agent.py#180-203) to use Archetype-specific strategies and hooks.
+    - Added extraction of **Podcast Name** and **URL**.
+    - Enforced personalized salutations ("Hi {First Name}").
+    - Added **Archetype Evidence** field to justify psychological profiling with quotes/behavior.
+    - Hardened JSON parsing logic.
+
+#### [MODIFY] [app.py](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/app.py)
+- Replaced DISC badge with **Archetype Badge** (Color-coded).
+- Added **Archetype Legend** to the sidebar.
+- Added **Podcast Host** section to lead details.
+- Improved Login UX (Enter key submission).
+- **Beautified Dossier Display**: Implemented a custom HTML/CSS card design for the dossier summary.
+- **Smart Retry Logic**: Added exponential backoff to handle API rate limits (429 errors) automatically.
+- **Budget Safety Guard**: Implemented a hard limit (`SAFETY_LIMIT = 50`) on leads processed per run to prevent accidental overage.
+- **Bulk Actions UI**: Added a sidebar tool to automatically scan and regenerate all incomplete leads in one click.
+- **Email Guessing**: Implemented logic to guess missing emails using AI and provide a reason. Display is beautified with bold text for the email and italics for the explanation.
+- **Manual Updates**: Added a unified "Manual Updates" form to allow users to edit both Email and LinkedIn URL directly in the dashboard.
+- **Data Integrity Audit**: Created an automated [integrity_check.py](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/integrity_check.py) script and dashboard button to verify that each lead's current role matches the target firm, flagging mismatches for review.
+- **CSV Import & Smart Enrichment**: 
+    - **Import**: Sidebar widget to upload new leads (even with just Name/Firm).
+    - **Auto-Discovery**: The "Fix Incomplete Leads" tool will be upgraded to automatically search for and find LinkedIn profiles if they are missing from the imported data, before proceeding with the full dossier and email generation.
+- **Research: Azure/Outlook Integration**:
+    - **Goal**: Send approved drafts directly to Outlook.
+    - **Action**: Detailed discussion of technical requirements, pitfalls (OAuth2, Permissions, Security), and feasibility. No code implementation scheduled.
+- **Domain Knowledge Injection**:
+    - **Carrier Rules**: Enforce state-specific pitching for Anthem (CA, CO, NY, etc.), Cigna flexibility, and Aetna constraints.
+    - **FairPoint Strategy**: Target 'Controller'/'Analyst' profiles with Reference-Based Pricing (RBP) value props, handling "front desk" objections.
+    - **Logic Mapping**: specific rules for PBM carve-outs and avoiding "cannibalization" (Anthem FI -> Anthem SF).

@@ -1,0 +1,38 @@
+# Implementation Plan - The Bernays Protocol
+
+## Goal
+Upgrade the "Deep Recon" module to move beyond basic personality matching (DISC) and identify the **unconscious psychological driver** of each prospect. This is the "Bernays Protocol".
+
+## Core Concept: The 4 Hidden Drivers
+We will analyze every piece of intel to classify the broker into one of four archetypes:
+1.  **The King (Control):** Wants to build their own empire. Hates being dependent on big carriers (BUCA).
+    *   *Keywords:* "Custom", "Independent", "Self-funded", "Architecture".
+2.  **The Shepherd (Safety):** Wants to protect their clients from risk. Fears change/disruption.
+    *   *Keywords:* "Stewardship", "Protection", "Compliance", "Trusted Advisor".
+3.  **The Star (Status):** Wants to be seen as a thought leader/innovator.
+    *   *Keywords:* "Award winner", "Speaker", "Innovation", "Disruptor".
+4.  **The Merchant (Profit):** Purely transactional. Wants the best margin/lowest cost.
+    *   *Keywords:* "ROI", "Bottom line", "Cost containment", "Savings".
+
+## Proposed Changes
+
+### 1. Expand Intel Gathering ([recon_agent.py](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/recon_agent.py))
+We need more signal to find these deep drivers. We will add specific Serper searches:
+- **Podcasts/Interviews:** `site:youtube.com OR site:spotify.com "Name" "Firm" interview`
+- **News/PR:** `"{Name}" "{Firm}" press release OR announced OR award`
+- **Speaking:** `"{Name}" speaker conference`
+
+### 2. The Bernays Prompt ([recon_agent.py](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/recon_agent.py))
+We will completely overhaul [analyze_lead](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/recon_agent.py#105-132) to:
+- Ingest the new "Deep Web" intel.
+- Apply the **Bernays Filter**: "What is this person *really* selling? (Themselves, Safety, or Results?)".
+- Output: `Bernays_Archetype`, `Unconscious_Desire`, and a `Psychological_Hook`.
+
+### 3. Dashboard Update ([app.py](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/app.py))
+- Display the **Archetype** as a prominent badge (e.g., "👑 The King" or "🛡️ The Shepherd").
+- Show the "Unconscious Desire" in the dossier.
+
+## Verification Plan
+1.  **Dry Run:** Run the new [recon_agent.py](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/recon_agent.py) on a known lead (e.g., Kevin Overbey).
+2.  **Review:** Check if the "Archetype" matches our intuition.
+3.  **UI Check:** Ensure the new data points appear correctly in the dashboard cards.

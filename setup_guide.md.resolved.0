@@ -1,0 +1,44 @@
+# 🔑 Tech Stack Setup Guide
+
+To unblock development efficiently, please set up these accounts in the following order.
+
+## 🚨 Priority 1: The Foundation (Immediate Need)
+
+### 1. Google Cloud Project & Google Sheets (The Database)
+We need this to store any data we find.
+*   **Action:** Create a new Google Cloud Project (e.g., `point-c-scout`).
+*   **Enable APIs:**
+    *   Google Sheets API
+    *   Google Drive API
+*   **Service Account:** Create a Service Account, download the JSON key file, and rename it to `.streamlit/secrets.toml` format (I will help you format this later).
+*   **Master Sheet:** Create a Google Sheet (Tabs: `Leads`, `Logs`, `DNC_List`) and share it with the Service Account email.
+
+### 2. Serper API (The Hunter's Eyes)
+We need this for Module 1 to actually find leads.
+*   **Action:** Sign up at [serper.dev](https://serper.dev).
+*   **Cost:** Free tier is usually sufficient for dev/testing (2,500 queries).
+*   **Output:** Get the `SERPER_API_KEY`.
+
+## 🟠 Priority 2: The Brain (Needed for Module 2 & 3)
+
+### 3. Google Gemini API
+Needed for profiling leads and writing emails.
+*   **Action:** Get an API key from Google AI Studio.
+*   **Output:** Get the `GOOGLE_API_KEY`.
+
+## 🟢 Priority 3: The Delivery (Needed for Module 4)
+
+### 4. Microsoft Graph API (Outlook)
+Needed only when we are ready to push drafts to your actual email. We can mock this for now.
+*   **Action:** Register an App in Azure Portal.
+*   **Permissions:** `Mail.ReadWrite`.
+
+---
+
+## 📝 Credentials Checklist
+Once you have these, we will add them to a `.env` file or `.streamlit/secrets.toml`.
+
+- [ ] Google Cloud Service Account JSON
+- [ ] Google Sheet URL
+- [ ] Serper API Key
+- [ ] Gemini API Key

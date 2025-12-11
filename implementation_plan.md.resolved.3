@@ -1,0 +1,30 @@
+# Implementation Plan - Scout Dashboard
+
+## Goal
+Create a beautiful, user-friendly web interface for the sales team to view lead dossiers and export data, replacing the raw Google Sheet view.
+
+## Technology
+- **Framework:** Streamlit (Python) - Fast to build, good for data apps.
+- **Data Source:** Google Sheets ("Scout Leads").
+- **Styling:** Custom CSS to make it look "premium" and not like a default Streamlit app.
+
+## Proposed Changes
+
+### [app.py](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/app.py) (New/Overwrite)
+- **Connect to Google Sheets:** Reuse `gspread` logic from [recon_agent.py](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/recon_agent.py).
+- **UI Layout:**
+    - **Sidebar:** Filters (by Status, Firm, etc.) and "Export All" button.
+    - **Main Area:**
+        - Display leads as "Cards" or a styled Data Grid.
+        - For each lead, show: Name, Firm, Email, LinkedIn, and the **Dossier Summary** (formatted nicely).
+        - **Action Buttons:** "Export this Lead" (Download single CSV).
+
+### [requirements.txt](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/requirements.txt)
+- Add `streamlit` (if not present).
+
+## Verification Plan
+- Run `streamlit run app.py`.
+- Verify data loads from Google Sheet.
+- Test "Export All" button (should download full CSV).
+- Test "Export Individual" (should download single row CSV).
+- Check aesthetics (clean, readable fonts, good spacing).

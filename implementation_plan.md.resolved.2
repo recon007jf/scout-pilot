@@ -1,0 +1,31 @@
+# Implementation Plan - Email Validation
+
+## Goal
+Improve the quality of extracted emails by implementing a validation step that filters out "junk" results (e.g., `n@gmail.com`) and prioritizes emails that match the lead's name and firm.
+
+## Proposed Changes
+
+### [agent.py](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/agent.py)
+
+#### [MODIFY] [agent.py](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/agent.py)
+- **Add `validate_email(email, first_name, last_name, firm)` function:**
+    - **Length Check:** Reject if local part (before @) is < 3 characters.
+    - **Junk Filter:** Reject if local part is in a blacklist (e.g., `info`, `contact`, `admin`, `support`, `hello`) UNLESS it matches the firm domain exactly (optional, but usually we want personal emails).
+    - **Name Match:**
+        - Check if the email contains at least 3 consecutive characters from the First Name OR Last Name.
+        - OR check if it contains the initials.
+    - **Domain Check:**
+        - If the domain is a "free provider" (gmail, yahoo, etc.), enforce stricter name matching (must contain full first or last name).
+- **Update [process_lead](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/agent.py#109-170):**
+    - When iterating through search results, pass each candidate email through `validate_email`.
+    - If a candidate fails, keep looking.
+    - If no valid email is found in snippets, fall back to the "Guessed" logic.
+
+## Verification Plan
+
+### Automated Verification
+- Run the script against the full [leads.csv](file:///Users/josephlf/.gemini/antigravity/brain/02e59244-ce52-4904-b156-ca810a595f5c/leads.csv) list.
+- Check the output for "Heather Haseman".
+    - **Expected:** `n@gmail.com` should be rejected.
+    - **Expected:** It should either find a better email or fall back to `heather.haseman@firm.com` (Guessed).
+- Review the "Found Email" column for other short/junk emails.

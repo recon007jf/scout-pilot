@@ -1,0 +1,21 @@
+# Tasks
+
+- [x] Create project files
+    - [x] Create leads.csv
+    - [x] Create agent.py
+    - [x] Create requirements.txt
+- [x] Install dependencies
+- [x] Verify credentials and run script
+    - [x] Credentials format check passed
+    - [x] Run script (Success: Uploaded to 'Scout Leads')
+- [x] Save to GitHub
+    - [x] Create .gitignore
+    - [x] Initialize repo and commit
+    - [x] Push to remote
+- [ ] Integrate Serper API
+    - [x] Install python-dotenv
+    - [x] Create .env for API key
+    - [x] Install python-dotenv
+    - [x] Create .env for API key
+    - [x] Update agent.py with search logic (Query, Extraction, Fallback)
+    - [ ] Run script (Limit 5 leads)

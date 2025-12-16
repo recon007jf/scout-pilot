@@ -1,0 +1,4 @@
+Target_Broker_Firm,Target_Broker_Office,Broker_Contact_Name,Broker_Contact_Email,Broker_Role,Client_Company,Plan_Name,Plan_Number,Member_Count (Value Proxy),Match_Confidence,Location_Source_Used,Provider_City_Found,Self_Funded_Flag
+MERCER,", NAN",Thomas Richland,Thomas.richland@mercer.com,Deputy CEO,"LEIDOS, INC.",LEIDOS EMPLOYEE HEALTH AND WELFARE BENEFITS PLAN,501,27369,MEDIUM (Provider State Match),PROVIDER_STATE,Unknown,True
+MERCER,", NAN",Thomas Richland,Thomas.richland@mercer.com,Deputy CEO,SYSTEMAX INC.,SYSTEMAX INC. HEALTH AND WELFARE PLAN,501,763,MEDIUM (Provider State Match),PROVIDER_STATE,Unknown,True
+ALLIANT INSURANCE SERVICES,"IRVINE, CA",John Ludwig,john.ludwig@alliant.com,"SVP, Employee Benefits",PREMIER MEDICAL ASSOCIATES,PREMIER MEDICAL ASSOCIATES FLEXIBLE BENEFIT PLAN,502,341,MEDIUM (Provider State Match),PROVIDER_STATE,SAN DIEGO,True

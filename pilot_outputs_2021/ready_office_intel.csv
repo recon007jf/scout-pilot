@@ -1,0 +1,4 @@
+firm_name,First Name,Last Name,Email,City,State,Zip Code,matched_office_firm,matched_office_city,matched_office_state,estimated_book_size_lives,estimated_client_count,top_3_clients,match_confidence,Andrew_Reaction_Enum,Andrew_Training_Notes
+SEQUOIA,Sarah,J,sarah@sequoia.com,San Mateo,CA,94402.0,SEQUOIA,MENLO PARK,CA,78061.0,1,MAYO PENSION PLAN,1.0,,
+MERCER,Jessica,L,jessica@mercer.com,New York,NY,10036.0,MERCER,,,42181.0,1,"401(K) SAVINGS AND PROFIT SHARING PLAN FOR EMPLOYEES OF NIKE, INC.",1.0,,
+AON,David,K,david@aon.com,Chicago,IL,60601.0,AON,,,1830.0,1,VISTA OUTDOOR INC. PENSION AND RETIREMENT PLAN,1.0,,

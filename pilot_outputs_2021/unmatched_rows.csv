@@ -1,0 +1,11 @@
+firm_name,First Name,Last Name,Email,City,State,Zip Code,match_status,reason
+HUB,Andrew,W,andrew@benefitflow.com,San Francisco,CA,94105.0,UNMATCHED,Missing Location - No Firm Match
+ALLIANT,Mike,R,mike@alliant.com,Newport Beach,CA,92660.0,UNMATCHED,Missing Location - No Firm Match
+WTW,Emily,S,emily@wtw.com,Arlington,VA,22202.0,UNMATCHED,Missing Location - No Firm Match
+WILLIS,Chris,P,chris@willis.com,London,UK,,UNMATCHED,Missing Location - No Firm Match
+LOCKTON,Amanda,B,amanda@lockton.com,Kansas City,MO,64111.0,UNMATCHED,Missing Location - No Firm Match
+MARSH,John,D,john@marsh.com,New York,NY,10036.0,UNMATCHED,Missing Location - No Firm Match
+USI,Robert,M,robert@usi.com,Valhalla,NY,10595.0,UNMATCHED,Missing Location - No Firm Match
+NFP,Lisa,G,lisa@nfp.com,New York,NY,10017.0,UNMATCHED,Missing Location - No Firm Match
+BROWN & BROWN,Kevin,T,kevin@bbinsurance.com,Daytona Beach,FL,32114.0,UNMATCHED,Missing Location - No Firm Match
+ABD,Rachel,N,rachel@theabdteam.com,San Mateo,CA,94402.0,UNMATCHED,Missing Location - No Firm Match

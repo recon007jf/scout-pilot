@@ -1,0 +1,18 @@
+
+# IGNORE DATA FOLDERS
+pilot_outputs_2021/
+dol_spine/
+00_raw/
+10_bronze_parquet/
+20_silver_standardized/
+30_gold_products/
+pilot_outputs*/
+Scout_Data_Artifacts/
+
+# IGNORE FILE TYPES
+*.csv
+*.parquet
+*.zip
+*.log
+.DS_Store
+__pycache__/

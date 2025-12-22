@@ -1,3 +1,38 @@
+# Secrets
+.env
 credentials.json
-credentials.json
-credentials.json
+client_secret.json
+service_account.json
+token.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+
+# Environment
+.DS_Store
+
+# Data
+*.csv
+*.xlsx
+*.parquet
+*.json
+!pdl_test_response.json
+!policy.yaml
+*.db
+*.sqlite3
+
+# Directories
+Scout_Data_Artifacts/
+_dol_zip_inventory_tmp/
+_schema_xray_2023_tmp/
+_schema_xray_tmp/
+data/
+db/
+legacy_archive/
+
+# Logs
+*.log

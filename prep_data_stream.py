@@ -125,12 +125,41 @@ def run_prep_pipeline():
     # 3. TRIANGULATE (Sched A & C)
     log_event(f"🔗 Triangulating {len(anchors)} Candidates...")
     
-    # Load Roster
+    # Load Roster (CSV)
     roster = []
     try:
-        with open("biz_dev_roster.json", "r") as f:
-            roster = json.load(f)
-        log_event(f"   👥 Loaded Roster with {len(roster)} key contacts.")
+        if os.path.exists("data/roster_master.csv"):
+            with open("data/roster_master.csv", "r", encoding='latin-1') as f:
+                # Find Header
+                lines = f.readlines()
+                header_idx = -1
+                for i, line in enumerate(lines[:50]):
+                    if 'Account' in line and 'Name' in line:
+                         header_idx = i
+                         break
+                
+                if header_idx != -1:
+                    # Reset and parse properly
+                    f.seek(0)
+                    # Skip garbage lines
+                    for _ in range(header_idx): f.readline()
+                    
+                    r_reader = csv.DictReader(f)
+                    for row in r_reader:
+                        if row.get('Account') and row.get('Name'):
+                             roster.append({
+                                 'firm': row['Account'].strip(),
+                                 'person_name': row['Name'].strip(),
+                                 'email': row.get('Email', '').strip()
+                             })
+                    log_event(f"   👥 Loaded Golden Roster with {len(roster)} key contacts.")
+                else: log_event("   ⚠️ Roster CSV found but no headers.")
+        else:
+            # Fallback
+            with open("biz_dev_roster.json", "r") as f:
+                roster = json.load(f)
+            log_event(f"   ⚠️ Golden Roster missing. Loaded JSON backup ({len(roster)} contacts).")
+
     except Exception as e:
         log_event(f"   ⚠️ Roster Load Failed: {e}")
 
@@ -284,18 +313,20 @@ def run_prep_pipeline():
     # 4. ASSEMBLE & EXPORT
     log_event("📝 Assembling Final List...")
     
-    count = 0
-    with open(OUTPUT_FILE, 'w', newline='', encoding='utf-8') as f:
-        fieldnames = ['employer_name', 'broker_firm', 'broker_human_name', 'state', 'lives_count', 'source', 'verification_status', 'confidence_score']
+    # Write leads to single CSV
+    output_path = "data/pilot_static_data.csv"
+    with open(output_path, 'w', newline='', encoding='utf-8') as f:
+
+        fieldnames = ['employer_name', 'broker_firm', 'broker_human_name', 'broker_email', 'state', 'lives_count', 'source', 'verification_status', 'confidence_score', 'draft_email_text']
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         
+        count = 0
         for anchor in anchors:
             ack = anchor['ack_id']
             firm = "Unknown"
             source = "Unverified"
             
-            # Triangulate
             # Triangulate (Already done in-place)
             firm = anchor.get('broker_firm', 'Unknown')
             status = anchor.get('verification_status', 'UNMATCHED')
@@ -324,14 +355,18 @@ def run_prep_pipeline():
                      # 1. Direct Substring (High Confidence)
                      if roster_firm in gov_firm:
                          human_val = r['person_name']
+                         email_val = r.get('email', '') # Capture Email
                          anchor['verification_status'] = 'ROSTER_MATCH'
+                         anchor['broker_email'] = email_val # Store in anchor
                          break
                          
                      # 2. Fuzzy Match (SequenceMatcher)
                      ratio = difflib.SequenceMatcher(None, roster_firm, gov_firm).ratio()
                      if ratio > 0.6: # Relaxed from 0.8 per typical fuzzy needs
                          human_val = r['person_name']
+                         email_val = r.get('email', '')
                          anchor['verification_status'] = 'ROSTER_FUZZY'
+                         anchor['broker_email'] = email_val
                          break
             
             # --- DEMO INJECTION (Phase 80) ---
@@ -341,26 +376,40 @@ def run_prep_pipeline():
                  if anchor['lives'] > 500: 
                      # Assign random roster contact
                      r = random.choice(roster)
-                     human_val = r['person_name'] + " (Demo)"
+                     human_val = r['person_name']
                      firm_val = r['firm']  # Override carrier with synthetic broker
                      anchor['verification_status'] = 'DEMO_MATCH'
+                     anchor['broker_email'] = r.get('email', 'demo@scout.ai')
                      
             if not human_val: human_val = 'Unknown'
             
+            # --- EMAIL DRAFT INJECTION (Phase 83) ---
+            email_draft = None
+            if anchor.get('verification_status') in ['DEMO_MATCH', 'ROSTER_MATCH', 'ROSTER_FUZZY']:
+                # Extract First Name
+                first_name = human_val.split(' ')[0] if human_val and human_val != 'Unknown' else "Partner"
+                emp_name = anchor['employer_name']
+                lives = anchor['lives']
+                
+                email_draft = f"Subject: Strategic Opportunity - {emp_name}\n\nHi {first_name},\n\nI’ve been analyzing the recent DOL 5500 filings for the Western Region and identified {emp_name} as a high-potential target. They currently have {lives} participants and are self-funded.\n\nGiven your team's expertise with {firm_val}, this aligns perfectly with the strategy we discussed. I have prepared a preliminary stop-loss analysis based on their filing data.\n\nBest,\nScout AI"
+
             writer.writerow({
                 'employer_name': anchor['employer_name'],
                 'broker_firm': firm_val,
                 'broker_human_name': human_val, 
                 'state': anchor['state'],
                 'lives_count': anchor['lives'], # Fixed key name from 'lives'
-                'source': source,
-                'verification_status': status,
-                'confidence_score': confidence
+                'source': 'Schedule A (Commission)',
+                'verification_status': anchor.get('verification_status', 'MATCHED_A'),
+                'confidence_score': 100,
+                'draft_email_text': email_draft,
+                'broker_email': anchor.get('broker_email', '')
             })
             count += 1
             if count >= TARGET_LIMIT: break
                 
-    log_event(f"✅ SUCCESS: Generated {count} leads in {OUTPUT_FILE}")
+    log_event(f"✅ SUCCESS: Generated {count} leads in {output_path}")
 
 if __name__ == "__main__":
     run_prep_pipeline()
+

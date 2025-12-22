@@ -2,6 +2,11 @@ import streamlit as st
 import pandas as pd
 from modules.db_client import DBClient
 import json
+import modules.auth as auth
+
+# --- AUTHENTICATION ---
+if not auth.check_password():
+    st.stop()
 
 st.set_page_config(page_title="Pilot Review (Andrew Mode)", page_icon="🕵️", layout="wide")
 

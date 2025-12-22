@@ -11,6 +11,11 @@ from modules.db_client import DBClient
 from modules.ui_components import render_message, render_dossier
 from modules.drive_loader import download_data_from_drive
 from modules.auto_discovery import auto_discover_drive_files
+import modules.auth as auth
+
+# --- AUTHENTICATION ---
+if not auth.check_password():
+    st.stop()
 
 load_dotenv()
 st.set_page_config(page_title="Scout", page_icon="🦅", layout="wide")

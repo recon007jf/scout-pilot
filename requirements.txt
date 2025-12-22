@@ -13,3 +13,5 @@ google-cloud-storage
 gcsfs
 supabase
 gdown
+duckdb>=0.9.0
+peopledatalabs

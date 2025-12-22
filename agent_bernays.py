@@ -25,7 +25,8 @@ class BernaysAgent:
         
         for lead in leads:
             # Skip if already processed
-            if lead.get('draft_email_text') and len(lead['draft_email_text']) > 10:
+            draft = lead.get('draft_email_text')
+            if draft and isinstance(draft, str) and len(draft) > 10:
                 continue
                 
             # Skip if unverified (Quality Gate)

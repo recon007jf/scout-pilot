@@ -1,10 +1,16 @@
 import streamlit as st
 import pandas as pd
 import json
+import os
 import time
 
 # Custom Modules
+import modules.auth as auth
 from modules.db_client import DBClient
+
+# --- AUTHENTICATION ---
+if not auth.check_password():
+    st.stop()
 
 # --- CONFIGURATION ---
 st.set_page_config(
@@ -121,9 +127,36 @@ with st.sidebar:
     st.markdown("### 💾 Data & Export")
     
     # IMPORT BTN (Restored)
-    uploaded_file = st.file_uploader("📂 Import CSV Leads", type=["csv"], help="Upload BenefitFlow or Custom CSV")
+    # 1. AUTO-LOAD (Drive)
+    drive_id = os.getenv("ANDREW_LIST_ID")
+    if drive_id:
+        if st.button("🔄 Auto-Load Andrew's CSV (Drive)", help=f"Fetch ID: {drive_id}"):
+            with st.spinner("Downloading from Drive..."):
+                from modules.drive_loader import get_drive_service, download_file_authenticated
+                srv = get_drive_service()
+                if srv:
+                    ok, msg = download_file_authenticated(srv, drive_id, "data/temp_upload.csv")
+                    if ok:
+                        try:
+                            df_new = pd.read_csv("data/temp_upload.csv", encoding='latin-1')
+                            if len(df_new) > 0:
+                                st.success(f"✅ Loaded {len(df_new)} rows from Drive!")
+                                # Optional: You might want to do something with df_new here
+                                # For MVP, we just show it to confirm connection
+                                st.dataframe(df_new.head())
+                            else:
+                                st.warning("CSV Empty.")
+                        except Exception as e:
+                            st.error(f"Read Error: {e}")
+                    else:
+                        st.error(f"Download Error: {msg}")
+                else:
+                    st.error("Auth Failed.")
+    
+    # 2. MANUAL UPLOAD
+    uploaded_file = st.file_uploader("📂 Manual Import CSV", type=["csv"], help="Upload BenefitFlow or Custom CSV")
     if uploaded_file is not None:
-        if st.button("Load CSV Data"):
+        if st.button("Load Manual Data"):
              try:
                  uploaded_file.seek(0)
                  df_new = pd.read_csv(uploaded_file)

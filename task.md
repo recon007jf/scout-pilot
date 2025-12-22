@@ -178,7 +178,7 @@
     - [ ] Map internal schema to PDL Output Schema
   - [ ] **Infrastructure**
     - [x] Install `peopledatalabs` python package
-    - [x] Configure `PDL_API_KEY` in `.env`
+    - [ ] Configure `PDL_API_KEY` in `.env` (Delayed to Jan 2026)
     - [x] Create `test_pdl_connection.py`
   - [ ] **Implementation**
     - [ ] Create `pdl_enrichment_service.py` (Wrapper for PDL Client)
@@ -192,9 +192,9 @@
 
 - [ ] **Code Audit & Cleanup (New Year Clean Slate)**
   - [x] Create `code_audit_plan.md`
-  - [ ] Inventory legacy scripts (`v1`, `v2`, etc.)
-  - [ ] Identify `debug_*.py` files for deletion/archival
-  - [ ] Propose new directory structure (Move scripts to `scripts/`, core logic to `app/`)
+  - [x] Inventory legacy scripts (`v1`, `v2`, etc.)
+  - [x] Identify `debug_*.py` files for deletion/archival
+  - [x] Propose new directory structure (Move scripts to `scripts/`, core logic to `app/`)
 - [ ] Draft PDL Migration Plan
 - [ ] Review Andrew's Rules Logic
 - [ ] Review CSV Import UI Logic

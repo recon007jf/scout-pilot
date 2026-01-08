@@ -1,0 +1,19 @@
+{
+  "accounts": [
+    {
+      "id": "1",
+      "company": "CITY PROPERTY MANAGEMENT",
+      "contact": "Unknown",
+      "title": "Decision Maker",
+      "location": {
+        "lat": 33.405159,
+        "lng": -111.982019
+      },
+      "address": "AZ",
+      "status": "prospect",
+      "revenue": 0,
+      "lastContact": "2025-12-11 18:28:23",
+      "region": "AZ"
+    }
+  ]
+}

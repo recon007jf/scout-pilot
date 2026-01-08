@@ -21,6 +21,8 @@ venv/
 *.parquet
 *.json
 !pdl_test_response.json
+!biz_dev_roster.json
+!territory_data.json
 !policy.yaml
 *.db
 *.sqlite3
@@ -31,7 +33,7 @@ _dol_zip_inventory_tmp/
 _schema_xray_2023_tmp/
 _schema_xray_tmp/
 data/
-db/
+
 legacy_archive/
 
 # Logs

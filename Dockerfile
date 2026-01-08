@@ -1,25 +1,32 @@
-FROM python:3.9-slim
+# Multi-stage build for slim image
+FROM python:3.11-slim as builder
 
 WORKDIR /app
 
-# Install system dependencies (kept minimal)
-RUN apt-get update && apt-get install -y \
-    build-essential \
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first to leverage cache
 COPY requirements.txt .
+RUN pip install --user --no-cache-dir -r requirements.txt
 
-# Install Python dependencies
-RUN pip3 install -r requirements.txt
+# Final stage
+FROM python:3.11-slim
 
-# Copy the rest of the application
+WORKDIR /app
+
+# Copy installed packages from builder
+COPY --from=builder /root/.local /root/.local
+ENV PATH=/root/.local/bin:$PATH
+
+# Copy backend code
 COPY . .
 
-# Expose the port Streamlit runs on (Cloud Run expects 8080 by default)
-EXPOSE 8080
+# Environment Defaults (Override in Cloud Run)
+ENV PORT=8080
+ENV ALLOWED_ORIGINS="https://scout-ui.vercel.app,http://localhost:3000"
 
-# Run the application
-# server.port=8080 is crucial for Cloud Run
-# server.address=0.0.0.0 is required for external access
-ENTRYPOINT ["streamlit", "run", "app.py", "--server.port=8080", "--server.address=0.0.0.0", "--server.maxUploadSize=4096", "--server.enableCORS=false", "--server.enableXsrfProtection=false"]
+# Cloud Run Entrypoint
+CMD exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT}

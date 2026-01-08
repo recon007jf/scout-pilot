@@ -1,0 +1,280 @@
+import csv
+import os
+import sys
+import json
+import re
+import time
+from collections import defaultdict, Counter
+
+# Ensure src module is in path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
+from scout.broker_hunter import BrokerHunter
+
+# --- CONFIGURATION ---
+SERPER_API_KEY = os.getenv("SERPER_API_KEY")
+INPUT_FILE = os.getenv("INPUT_FILE") 
+INPUT_FILE_PATTERN = "production_results_" # Switched pattern to find the bigger file
+OUTPUT_FILENAME = "artifacts/Scout_Broker_Batch_50.csv"
+MAX_ROWS = int(os.getenv("MAX_ROWS", 150)) 
+CACHE_FILE = ".cache/serper_results.json"
+
+def normalize_key(name):
+    if not name: return ""
+    return re.sub(r'[^\w]', '', name).upper()
+
+def load_cache():
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, 'r') as f: return json.load(f)
+        except: return {}
+    return {}
+
+def save_cache(cache):
+    try:
+        with open(CACHE_FILE, 'w') as f: json.dump(cache, f, indent=2)
+    except: pass
+
+def run():
+    # LOGGING
+    log_file = open("broker_hunter_debug.log", "w")
+    def log(msg):
+        print(msg, flush=True)
+        log_file.write(msg + "\n")
+
+    log("🚀 EXECUTE: Broker Hunter Production Batch (Target: 50+)...")
+    
+    # 1. INPUT RESOLUTION
+    if INPUT_FILE: input_file = INPUT_FILE
+    else:
+        root_dir = os.getcwd()
+        files = [f for f in os.listdir(root_dir) if f.startswith(INPUT_FILE_PATTERN) and f.endswith('.csv')]
+        if not files: 
+            # Fallback to scout v7 if production results missing
+            files = [f for f in os.listdir(root_dir) if f.startswith("scout_v7_") and f.endswith('.csv')]
+        
+        if not files:
+            log(f"❌ CRITICAL: No suitable input CSVs found.")
+            sys.exit(1)
+            
+        input_file = max(files, key=os.path.getmtime)
+    
+    log(f"   Target: {input_file} | Max Rows: {MAX_ROWS}")
+
+    # 2. INIT HUNTER
+    try:
+        hunter = BrokerHunter(SERPER_API_KEY)
+    except ValueError as e:
+        log(f"❌ CONFIG ERROR: {e}")
+        sys.exit(1)
+
+    # 3. READ ROWS
+    all_rows = []
+    with open(input_file, 'r', encoding='utf-8-sig') as f:
+        reader = csv.DictReader(f)
+        for i, row in enumerate(reader):
+            if i >= MAX_ROWS: break
+            all_rows.append(row)
+    
+    # Check if headers exist, map leniently
+    
+    # STATS BLOCK
+    stats = Counter()
+    stats['total_raw'] = len(all_rows)
+
+    # --- PASS 1: INDEXING (Build Family Tree) ---
+    broker_index = {}
+    
+    for row in all_rows:
+        sponsor = row.get('sponsor_name') or row.get('Client') or ""
+        s_key = normalize_key(sponsor)
+        if not s_key: continue
+        
+        # Priority Candidates
+        candidates = [
+            (row.get('broker_firm_name'), 3), 
+            (row.get('schedule_c_broker'), 2),
+            (row.get('Broker_Firm_Name'), 1)
+        ]
+        
+        best_firm = None
+        current_score = 0
+        
+        for firm, score in candidates:
+            if firm and len(firm) > 3 and "UNKNOWN" not in firm.upper():
+                if hunter.validate_firm_name(firm, sponsor):
+                    if score > current_score:
+                        best_firm = firm
+                        current_score = score
+                    elif score == current_score:
+                         if best_firm and len(firm) > len(best_firm): best_firm = firm
+
+        if best_firm:
+            # Check contact too
+            c_name = row.get('contact_name') or row.get('Broker_Contact_Name')
+            c_email = row.get('contact_email') or row.get('Broker_Email')
+            
+            existing = broker_index.get(s_key)
+            should_update = False
+            if not existing: should_update = True
+            elif c_email and not existing['email']: should_update = True
+            
+            if should_update:
+                broker_index[s_key] = {
+                    "firm": best_firm,
+                    "name": c_name or "",
+                    "email": c_email or "",
+                    "source": "Schedule C (Direct)"
+                }
+
+    log(f"   Index Built: {len(broker_index)} known parents.")
+
+    # --- PASS 2 & 3: ENRICHMENT ---
+    search_cache = load_cache()
+    new_cache_entries = 0
+    
+    final_results = []
+    seen_combinations = set() # Dedup by (sponsor, email)
+    
+    for i, row in enumerate(all_rows):
+        sponsor = row.get('sponsor_name') or row.get('Client') or ""
+        s_key = normalize_key(sponsor)
+        
+        # Result Container
+        res = {
+            "firm_name": "", "broker_name": "", "email": "", 
+            "source": "", "data_tier": "", "confidence_score": "Low"
+        }
+        
+        # A. Tier 1: Direct Schedule C
+        # Check if this row *itself* contributed to index?
+        # Actually just check index. If index says source="Schedule C", it's Tier 1 or 2.
+        
+        match = broker_index.get(s_key)
+        
+        if match:
+            res["firm_name"] = match['firm']
+            res["broker_name"] = match['name']
+            res["email"] = match['email']
+            res["confidence_score"] = "0.95"
+            
+            # Distinguish Direct vs Inherited
+            # If input row had the data, it's Direct. If not, Inherited.
+            row_had_firm = bool((row.get('broker_firm_name') or row.get('schedule_c_broker')) and hunter.validate_firm_name(row.get('broker_firm_name','') or row.get('schedule_c_broker',''), sponsor))
+            
+            if row_had_firm:
+                res["source"] = "Schedule C (Direct)"
+                res["data_tier"] = "Tier 1"
+                stats['tier_1'] += 1
+            else:
+                res["source"] = "Schedule C (Inherited)"
+                res["data_tier"] = "Tier 2"
+                stats['tier_2'] += 1
+        
+        else:
+            # B. Tier 3: Search (Serper)
+            # Only if Action implies needed
+            action = row.get('Action', 'UNKNOWN')
+            if action in ["SEND", "REVIEW", "CONTACT_BROKER", "search_needed"]:
+                # Check Cache First
+                cached = search_cache.get(s_key)
+                if cached:
+                    res["firm_name"] = cached.get('firm', '')
+                    res["broker_name"] = cached.get('name', '')
+                    res["email"] = cached.get('email', '')
+                    res["confidence_score"] = cached.get('conf', 'Low')
+                    res["source"] = "Serper (Cached)"
+                    res["data_tier"] = "Tier 3"
+                    stats['tier_3'] += 1
+                else:
+                    # Execute Search
+                    canon, tok, conf, evid, stat, _ = hunter.find_broker_firm(sponsor)
+                    
+                    c_res = {"firm": canon if canon!="UNKNOWN" else "", "name": "", "email": "", "conf": conf, "evid": evid}
+                    
+                    if tok != "UNKNOWN":
+                        people, _ = hunter.find_broker_person(sponsor, tok, canon)
+                        if people: c_res["name"] = people[0]['name']
+                        email, _, _ = hunter.find_broker_email(sponsor, tok, evid)
+                        c_res["email"] = email
+                    
+                    search_cache[s_key] = c_res
+                    new_cache_entries += 1
+                    
+                    res["firm_name"] = c_res['firm']
+                    res["broker_name"] = c_res['name']
+                    res["email"] = c_res['email']
+                    res["confidence_score"] = c_res['conf']
+                    res["source"] = "Serper (Live)"
+                    res["data_tier"] = "Tier 3"
+                    stats['tier_3_live'] += 1
+                    stats['tier_3'] += 1 # Total tier 3
+            else:
+                res["source"] = "Skipped"
+                stats['skipped_logic'] += 1
+
+        # C. Tier 4: PDL 
+        # (Not Implemented - Placeholder logic)
+        if not res["email"] and res["data_tier"] == "Tier 3":
+             # If we were doing PDL, we'd do it here.
+             pass
+
+        # VALIDATION & FILTERING
+        # 1. Must have Valid Email (contains @)
+        if not res["email"] or "@" not in str(res["email"]):
+            stats['dropped_no_email'] += 1
+            continue
+            
+        # 2. Must be Unique (Dedup by Sponsor + Email) -> actually, prompt says "Dedup by Email/Name"
+        # If same email appears relative to different sponsor? Probably valid (broker handles multiple).
+        # But "50 unique rows". If "john@gallagher.com" appears 10 times, user said "not 10 duplicates".
+        # So key should be just email?
+        
+        uniq_key = res["email"].lower().strip()
+        if uniq_key in seen_combinations:
+            stats['dropped_duplicate'] += 1
+            continue
+        
+        seen_combinations.add(uniq_key)
+        
+        # Add to Final Output
+        final_results.append(res)
+
+    if new_cache_entries > 0:
+        save_cache(search_cache)
+        log(f"   Saved {new_cache_entries} results to cache.")
+
+    # --- OUTPUT ---
+    headers = ["broker_name", "firm_name", "email", "source", "confidence_score", "data_tier"]
+    
+    with open(OUTPUT_FILENAME, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.DictWriter(f, fieldnames=headers, quoting=csv.QUOTE_ALL)
+        writer.writeheader()
+        writer.writerows(final_results)
+
+    stats['final_unique'] = len(final_results)
+
+    # --- REPORT ---
+    rpt = f"""
+==================================================
+   BROKER HUNTER BATCH REPORT
+==================================================
+1. Total Raw Rows Processed:      {stats['total_raw']}
+2. Rows with Direct Schedule C:   {stats['tier_1']}
+3. Rows Enriched via Family Tree: {stats['tier_2']}
+4. Rows Enriched via Serper:      {stats['tier_3']} (Live: {stats['tier_3_live']})
+5. Rows Dropped (No Email Found): {stats['dropped_no_email']}
+6. Rows Dropped (Duplicate):      {stats['dropped_duplicate']}
+--------------------------------------------------
+FINAL UNIQUE VALID ROWS:          {stats['final_unique']}
+==================================================
+Output: {OUTPUT_FILENAME}
+"""
+    log(rpt)
+
+if __name__ == "__main__":
+    import os, sys
+    if not os.getenv('ALLOW_LEGACY_RUNS'):
+        print('SAFETY LOCK: Set ALLOW_LEGACY_RUNS=1 to execute this legacy script.')
+        sys.exit(0)
+
+    run()

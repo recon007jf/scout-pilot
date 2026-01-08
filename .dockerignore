@@ -18,15 +18,13 @@ _dol_*/
 _schema_*/
 sniper_*.log
 *.log
-# Block all CSVs by default
 *.csv
-# Block other large assets
 *.parquet
 *.json
 *.zip
 *.db
 
-# --- Except Essential Static Assets (Using ! to UN-IGNORE) ---
+# --- Except Essential Static Assets ---
 !territory_data.json
 !biz_dev_roster.json
 
@@ -46,8 +44,6 @@ walkthrough.md
 task.md
 deployment_readiness.md
 
-# CRITICAL OVERRIDE: Un-Ignore the Golden CSV
+# CRITICAL OVERRIDE: Allow Production Data
 !Master_Hunting_List_Production_v3_ANDREW_ENRICHED_FUNDING_PATCHED.csv
-
-# NOTE: Dockerfile, main.py, requirements.txt are IMPLICITLY INCLUDED because they are not listed here.
-# (Do NOT add them to this file unless you want to exclude them)
+!Master_Hunting_List_Production_v3_SYSTEM_ENRICHED_FUNDING_PATCHED.csv

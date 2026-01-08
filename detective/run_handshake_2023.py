@@ -37,12 +37,34 @@ def normalize_company(name):
     # Regex for legal suffixes at the END of the string
     patterns = [
         r',?\s*inc\.?$', r',?\s*llc\.?$', r',?\s*ltd\.?$', r',?\s*corp\.?$', 
-        r',?\s*corporation$', r',?\s*co\.$', r',?\s*company$'
+        r',?\s*corporation$', r',?\s*co\.$', r',?\s*company$', r',?\s*services,?\s*inc\.?$'
     ]
     for pat in patterns:
         name = re.sub(pat, '', name, flags=re.IGNORECASE)
+    
+    # Gold Standard Mappings (Manual Overrides)
+    name = name.strip()
+    overrides = {
+        "gallagher benefit": "Arthur J. Gallagher",
+        "gallagher benefits": "Arthur J. Gallagher",
+        "gallagher": "Arthur J. Gallagher",
+        "arthur j gallagher": "Arthur J. Gallagher",
+        "marsh & mclennan agency": "Marsh",
+        "marsh & mclennan": "Marsh",
+        "willis towers watson": "WTW",
+        "hub international": "HUB International",
+        "lockton companies": "Lockton",
+        "lockton": "Lockton",
+        "nfp corp": "NFP",
+        "nfp": "NFP"
+    }
+    # Check for prefix matches or exact matches
+    lower_name = name.lower()
+    for key, val in overrides.items():
+        if lower_name == key or lower_name.startswith(key + " "):
+            return val
             
-    return name.strip()
+    return name.title()
 
 def main():
     print(f"[START] Handshake Protocol (Part 1 Correction) initiated...")
@@ -141,17 +163,41 @@ def main():
     )
     
     # 6. SAVE
+    # 6. FILTER & CLEAN EMAILS (Gold Standard)
+    print("[INFO] validating email syntax...")
+    def is_valid_email(e):
+        return bool(re.match(r"[^@]+@[^@]+\.[^@]+", str(e))) and "example.com" not in str(e)
+    
+    final_matches = final_matches[final_matches['contact_email'].apply(is_valid_email)].copy()
+    
+    # 7. PREPARE SPONSOR CONTEXT (The Hook)
+    # We ensure these columns exist for the 'sponsor_linkage' generation downstream
+    # (Lives, EIN, Sponsor Name are already in leads_df/final_matches)
+    
+    print("[INFO] Finalizing Gold Standard Columns...")
     output_cols = [
         'plan_key', 'ein', 'sponsor_name', 'employer_state',
         'broker_firm_name', 'normalized_broker_name',
-        'contact_name', 'contact_title', 'contact_email', 'contact_city'
+        'contact_name', 'contact_title', 'contact_email', 'contact_city',
+        'contact_state',  # Added for completeness
+        'LIVES',          # Crucial for 'Lives' Hook
+        'assets_amount'   # Helpful context
     ]
+    
+    # Ensure columns exist (renaming if safe)
+    if 'LIVES' not in final_matches.columns and 'lives' in final_matches.columns:
+        final_matches['LIVES'] = final_matches['lives']
+    if 'assets_amount' not in final_matches.columns:
+        final_matches['assets_amount'] = 0 # Default if missing
+        
+    # Valid output cols subset
+    valid_cols = [c for c in output_cols if c in final_matches.columns]
     # Handle column names if they changed during merge (broker_firm_name -> broker_firm_name_lead)
     if 'broker_firm_name_lead' in final_matches.columns:
         final_matches['broker_firm_name'] = final_matches['broker_firm_name_lead']
 
-    print(f"[SUCCESS] Handshake Matched {len(final_matches):,} pairs.")
-    final_matches[output_cols].to_parquet(MATCH_OUTPUT_FILE)
+    print(f"[SUCCESS] Handshake Matched {len(final_matches):,} pairs (Cleaned).")
+    final_matches[valid_cols].to_parquet(MATCH_OUTPUT_FILE)
     print(f"[SAVED] {MATCH_OUTPUT_FILE}")
 
 if __name__ == "__main__":

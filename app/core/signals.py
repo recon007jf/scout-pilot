@@ -44,68 +44,65 @@ class SignalsEngine:
         signals = []
 
         # 1. Fetch "Warm" or "High-Risk" Profiles (High Priority)
-        try:
-            # Get top 5 interesting profiles
-            res = self.db.table("psyche_profiles")\
-                .select("*, dossiers(*)")\
-                .in_("risk_profile", ["Warm", "High-Risk"])\
-                .order("updated_at", desc=True)\
-                .limit(5)\
-                .execute()
-                
-            for row in res.data:
-                dossier = row.get("dossiers")
-                if not dossier: continue
-                
-                # Check formatting of dossier (it might be a list or dict)
-                if isinstance(dossier, list) and len(dossier) > 0:
-                    dossier = dossier[0]
-                
-                risk = row.get("risk_profile")
-                
-                # Map to Signal
-                sig_type = "company_news"
-                title = "High Value Target Detected"
-                priority = "high"
-                score = 90
-                details = f"{dossier.get('full_name')} at {dossier.get('firm')} is marked as {risk}."
-                
-                if risk == "Warm":
-                    sig_type = "email_reply" # Proxy for engagement
-                    title = "Engagement Opportunity"
-                    score = 95
-                    details = "Target profile indicates warm reception likely."
-                
-                # Create Signal Object
-                contact = SignalContact(
-                    id=dossier["id"],
-                    full_name=dossier.get("full_name", "Unknown"),
-                    firm=dossier.get("firm", "Unknown"),
-                    role=dossier.get("role", ""),
-                    work_email=dossier.get("work_email", ""),
-                    linkedin_url=dossier.get("linkedin_url", "") or ""
-                )
-                
-                # Use psyche_profile ID as Signal ID base to be consistent but unique per day?
-                # Just use random or hash
-                sig_id = f"sig_{row['id']}_{str(datetime.now().date())}"
-                
-                s = Signal(
-                    id=sig_id,
-                    type=sig_type,
-                    priority=priority,
-                    priority_score=score,
-                    timestamp=str(row.get("updated_at") or datetime.now().isoformat()),
-                    title=title,
-                    details=details,
-                    actionable=True,
-                    contact=contact,
-                    metadata={"risk_profile": risk}
-                )
-                signals.append(s)
-
-        except Exception as e:
-            logger.error(f"Error generating signals: {e}")
+        # 1. Fetch "Warm" or "High-Risk" Profiles (High Priority)
+        # Get top 5 interesting profiles
+        res = self.db.table("psyche_profiles")\
+            .select("*, dossiers(*)")\
+            .in_("risk_profile", ["Warm", "High-Risk"])\
+            .order("updated_at", desc=True)\
+            .limit(5)\
+            .execute()
+            
+        for row in res.data:
+            dossier = row.get("dossiers")
+            if not dossier: continue
+            
+            # Check formatting of dossier (it might be a list or dict)
+            if isinstance(dossier, list) and len(dossier) > 0:
+                dossier = dossier[0]
+            
+            risk = row.get("risk_profile")
+            
+            # Map to Signal
+            sig_type = "company_news"
+            title = "High Value Target Detected"
+            priority = "high"
+            score = 90
+            details = f"{dossier.get('full_name')} at {dossier.get('firm')} is marked as {risk}."
+            
+            if risk == "Warm":
+                sig_type = "email_reply" # Proxy for engagement
+                title = "Engagement Opportunity"
+                score = 95
+                details = "Target profile indicates warm reception likely."
+            
+            # Create Signal Object
+            contact = SignalContact(
+                id=dossier["id"],
+                full_name=dossier.get("full_name", "Unknown"),
+                firm=dossier.get("firm", "Unknown"),
+                role=dossier.get("role", ""),
+                work_email=dossier.get("work_email", ""),
+                linkedin_url=dossier.get("linkedin_url", "") or ""
+            )
+            
+            # Use psyche_profile ID as Signal ID base to be consistent but unique per day?
+            # Just use random or hash
+            sig_id = f"sig_{row['id']}_{str(datetime.now().date())}"
+            
+            s = Signal(
+                id=sig_id,
+                type=sig_type,
+                priority=priority,
+                priority_score=score,
+                timestamp=str(row.get("updated_at") or datetime.now().isoformat()),
+                title=title,
+                details=details,
+                actionable=True,
+                contact=contact,
+                metadata={"risk_profile": risk}
+            )
+            signals.append(s)
             
         # 2. Fetch Recently Added (New Prospects)
         try:

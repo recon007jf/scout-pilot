@@ -8,7 +8,7 @@ class BriefingEngine:
     def __init__(self, db: Client):
         self.db = db
 
-    def generate_briefing(self, enable_high_risk: bool = False) -> Dict:
+    def generate_briefing(self, user_email: str = None, enable_high_risk: bool = False) -> Dict:
         """
         Strict Ranking:
         1. Warm

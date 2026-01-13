@@ -52,17 +52,14 @@ class NetworkEngine:
         # Check: psyche_profiles has dossier_id. So we select from dossiers and embed psyche_profiles?
         # Supabase: select *, psyche_profiles(*)
         
-        try:
-            res = self.db.table("dossiers")\
-                .select("*, psyche_profiles(*)")\
-                .order("updated_at", desc=True)\
-                .range(offset, offset + page_size - 1)\
-                .execute()
-                
-            raw_contacts = res.data
-        except Exception as e:
-            logger.error(f"Failed to fetch contacts: {e}")
-            return {"contacts": [], "pagination": {"page": page, "page_size": page_size, "total": 0}}
+        # 2. Fetch Data
+        res = self.db.table("dossiers")\
+            .select("*, psyche_profiles(*)")\
+            .order("updated_at", desc=True)\
+            .range(offset, offset + page_size - 1)\
+            .execute()
+            
+        raw_contacts = res.data
 
         contacts = []
         

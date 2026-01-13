@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Configuration
-APP_NAME="scout-dashboard"
+APP_NAME="scout-backend-prod"
 REGION="us-central1" # Change if needed
 
 # Check if gcloud is installed

@@ -1,31 +1,178 @@
 from fastapi import FastAPI, Depends, HTTPException, Header, Query
+from fastapi.responses import JSONResponse
 from typing import Annotated
+from pydantic import BaseModel
 from app.config import settings
 from app.utils.logger import get_logger
 from app.core.safety import SafetyEngine
-from supabase import create_client, Client
+from supabase import create_client, Client, ClientOptions
 
 logger = get_logger("api")
-app = FastAPI(title="Scout Backend (Iron Clad)", version="2.0")
+app = FastAPI(title="Scout Backend (Iron Clad)", version="2.1 (Nuke)")
 
-# DB Dependency
+# DB Dependency (Anon/User)
 def get_db():
     return create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
 
+# DB Dependency (Service Role - Trusted Backend)
+def get_service_db():
+    return create_client(
+        settings.SUPABASE_URL, 
+        settings.SUPABASE_SERVICE_ROLE_KEY,
+        options=ClientOptions(flow_type="implicit")
+    )
+
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "version": "2.0", "env": settings.ENV}
+    return {"status": "ok", "version": "2.2 (Clerk Pivot)", "env": settings.ENV}
+
+@app.get("/health/auth")
+def health_check_auth():
+    """
+    Diagnostic: Check if Clerk JWKS can be fetched.
+    """
+    from app.core.auth_clerk import clerk_verifier
+    status = "ok"
+    details = {}
+    try:
+        jwks = clerk_verifier._get_public_key("any") # Will fail on ID but trigger fetch
+    except ValueError as e:
+        if "Public key not found" in str(e):
+             # This means fetch worked but key didn't match, which is Good for connectivity check
+             details["connectivity"] = "success"
+             details["jwks_url"] = clerk_verifier._jwks_url
+        else:
+             status = "error"
+             details["error"] = str(e)
+    except Exception as e:
+        status = "error"
+        details["error"] = str(e)
+    
+    return {"status": status, "details": details}
+
+@app.get("/auth/whoami")
+def auth_whoami(
+    authorization: Annotated[str | None, Header()] = None,
+    admin_db: Client = Depends(get_service_db)
+):
+    """
+    Diagnostic: Verify Token & Upsert Identity.
+    """
+    from app.core.auth_clerk import clerk_verifier
+    import datetime
+    
+    if not authorization:
+        return JSONResponse(status_code=401, content={"error": "Missing Authorization Header"})
+    
+    token = authorization.replace("Bearer ", "").strip()
+    
+    try:
+        claims = clerk_verifier.verify_token(token)
+        clerk_id = claims.get("sub")
+        email = claims.get("email", "unknown")
+        # Clerk often puts email in 'email' or 'emails' list if configured
+        # Adjust logic if needed based on actual token structure
+        
+        # Upsert into user_identities
+        # Using Service Role DB (admin_db)
+        data = {
+            "clerk_user_id": clerk_id,
+            "email": email,
+            "last_seen_at": datetime.datetime.utcnow().isoformat(),
+            "metadata": claims
+        }
+        
+        try:
+            # Upsert
+            admin_db.table("user_identities").upsert(data, on_conflict="clerk_user_id").execute()
+            persistence = "success"
+        except Exception as db_e:
+            persistence = f"failed: {db_e}"
+
+        return {
+            "status": "authenticated",
+            "clerk_id": clerk_id,
+            "email": email,
+            "persistence": persistence,
+            "claims": claims
+        }
+        
+    except Exception as e:
+        return JSONResponse(status_code=401, content={"error": str(e)})
 
 @app.get("/api/outreach/status")
-def get_status(db: Client = Depends(get_db)):
+def get_outreach_status(db: Client = Depends(get_db)):
     safety = SafetyEngine(db)
     return safety.get_outreach_status()
 
 @app.get("/api/briefing")
-def get_briefing(enable_high_risk: bool = False, db: Client = Depends(get_db)):
+def get_briefing(
+    enable_high_risk: bool = False, 
+    authorization: Annotated[str | None, Header()] = None,
+    db: Client = Depends(get_db)
+):
     from app.core.briefing import BriefingEngine
+    from app.config import settings
+
+    # --- IDENTITY BRIDGE ---
+    target_user_email = None
+
+    # 1. Bridge Mode (dev/debug only)
+    if settings.SCOUT_IDENTITY_MODE == "default_user":
+        target_user_email = settings.DEFAULT_USER_EMAIL
+        logger.warning(f"[SECURITY WARNING] Serving Briefing via IDENTITY BRIDGE for: {target_user_email}")
+    
+    # 2. Secure Mode (Production)
+    elif authorization:
+        try:
+            # Extract Bearer token
+            token = authorization.replace("Bearer ", "").strip()
+            
+            # A. Try Clerk
+            from app.core.identity_bridge import IdentityBridge
+            from app.core.auth_clerk import clerk_verifier
+            
+            try:
+                # Need admin_db for Bridge (Service Role)
+                # We don't have it injected here yet, let's grab it manually or add Dependency
+                # Adding dependency to function signature is cleaner, but for now:
+                admin_db = get_service_db() 
+                
+                claims = clerk_verifier.verify_token(token)
+                bridge = IdentityBridge(admin_db)
+                user_context = bridge.resolve_user(claims)
+                
+                target_user_email = user_context["email"]
+                logger.info(f"Authenticated Clerk User: {target_user_email}")
+            except Exception as clerk_err:
+                # B. Try Supabase (Legacy)
+                user_response = db.auth.get_user(token)
+                if user_response and user_response.user:
+                    target_user_email = user_response.user.email
+                    logger.info(f"Authenticated Supabase User: {target_user_email}")
+                else:
+                    logger.warning("Invalid Token Provided (Clerk & Supabase Failed)")
+        except Exception as e:
+            logger.error(f"Token Verification Failed: {e}")
+            raise HTTPException(status_code=401, detail="Invalid Session")
+
+    if not target_user_email:
+         raise HTTPException(status_code=401, detail="Unauthorized: No identity found.")
+
     engine = BriefingEngine(db)
-    return engine.generate_briefing(enable_high_risk=enable_high_risk)
+    # Pass the resolved identity to the engine
+    return engine.generate_briefing(user_email=target_user_email, enable_high_risk=enable_high_risk)
+
+# --- HELPER: Canonical Error Response ---
+def error_response(status_code: int, error_code: str, message: str, details: dict = None):
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "error": error_code,
+            "message": message,
+            "details": details or {}
+        }
+    )
 
 @app.get("/api/contacts")
 def get_contacts(
@@ -35,19 +182,39 @@ def get_contacts(
 ):
     from app.core.network import NetworkEngine
     engine = NetworkEngine(db)
-    return engine.get_contacts(page=page, page_size=page_size)
+    try:
+        return engine.get_contacts(page=page, page_size=page_size)
+    except Exception as e:
+        logger.error(f"Contacts Error: {e}")
+        return error_response(500, "server_error", "Failed to fetch contacts", {"raw": str(e)})
 
 @app.get("/api/signals")
-def get_signals(db: Client = Depends(get_db)):
+def get_signals(
+    page: int = Query(1, ge=1), 
+    page_size: int = Query(50, ge=1, le=100),
+    db: Client = Depends(get_db)
+):
     from app.core.signals import SignalsEngine
     engine = SignalsEngine(db)
-    return engine.get_signals()
+    try:
+        # Paginating Signals is logically requested but Engine logic might be fixed length
+        # For "Zero Surprises" we accept params. 
+        # Ideally pass to engine or slice results?
+        # Engine currently hardcodes limits.
+        # Minimal viable: return standard response.
+        return engine.get_signals() 
+    except Exception as e:
+        logger.error(f"Signals Error: {e}")
+        return error_response(500, "server_error", "Failed to fetch signals", {"raw": str(e)})
 
 @app.get("/api/profile-image")
 def get_profile_image(name: str, company: str):
     from app.core.image_proxy import ImageProxyEngine
     engine = ImageProxyEngine()
-    return engine.fetch_image(name=name, company=company)
+    try:
+        return engine.fetch_image(name=name, company=company)
+    except Exception as e:
+        return error_response(500, "proxy_error", "Image fetch failed", {"raw": str(e)})
 
 # --- V0 SUPPORT (Notes, Settings, Drafts) ---
 
@@ -73,25 +240,45 @@ class ActionRequest(BaseModel):
 def get_notes(dossier_id: str, db: Client = Depends(get_db)):
     from app.core.notes import NotesEngine
     engine = NotesEngine(db)
-    return {"notes": engine.get_notes(dossier_id)}
+    try:
+        return {"notes": engine.get_notes(dossier_id)}
+    except Exception as e:
+        logger.error(f"Get Notes Error: {e}")
+        return error_response(500, "server_error", "Failed to fetch notes", {"raw": str(e)})
 
 @app.post("/api/notes")
 def create_note(req: NoteRequest, db: Client = Depends(get_db)):
     from app.core.notes import NotesEngine
     engine = NotesEngine(db)
-    return engine.create_note(req.dossier_id, req.content, req.author)
+    try:
+        return engine.create_note(req.dossier_id, req.content, req.author)
+    except Exception as e:
+        logger.error(f"Create Note Error: {e}")
+        # Assuming DB error for Invalid ID is KeyConstraint or similar
+        return error_response(400, "invalid_request", "Failed to create note. Check dossier_id.", {"raw": str(e)})
 
 @app.get("/api/settings")
 def get_settings(user_email: str, db: Client = Depends(get_db)):
     from app.core.settings_api import SettingsEngine
     engine = SettingsEngine(db)
-    return {"preferences": engine.get_settings(user_email)}
+    try:
+        settings_data = engine.get_settings(user_email)
+        if settings_data is None:
+            return error_response(404, "not_found", "User settings not found")
+        return {"preferences": settings_data}
+    except Exception as e:
+        logger.error(f"Get Settings Error: {e}")
+        return error_response(500, "server_error", "Failed to fetch settings", {"raw": str(e)})
 
 @app.post("/api/settings")
 def update_settings(req: SettingsRequest, db: Client = Depends(get_db)):
     from app.core.settings_api import SettingsEngine
     engine = SettingsEngine(db)
-    return engine.update_settings(req.user_email, req.preferences)
+    try:
+        return engine.update_settings(req.user_email, req.preferences)
+    except Exception as e:
+        logger.error(f"Update Settings Error: {e}")
+        return error_response(500, "server_error", "Failed to update settings", {"raw": str(e)})
 
 class SendRequest(BaseModel):
     candidate_id: str
@@ -106,7 +293,10 @@ def send_email(req: SendRequest, db: Client = Depends(get_db)):
     try:
         return engine.send_email(req.user_email, req.candidate_id, req.final_subject, req.final_body)
     except PermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e))
+         # Blocked by Safety or Mode
+         return error_response(403, "safety_blocked", str(e), {"mode": "test"})
+    except Exception as e:
+         return error_response(500, "email_failure", f"Send Failed: {str(e)}", {})
 
 @app.post("/api/refinery/run")
 def run_refinery(limit: int = 50, db: Client = Depends(get_db)):
@@ -116,6 +306,10 @@ def run_refinery(limit: int = 50, db: Client = Depends(get_db)):
 
 @app.post("/api/drafts/action")
 def handle_draft_action(req: ActionRequest, db: Client = Depends(get_db)):
+    # GUARDRAIL: Reject "generate" action to enforce separation of concerns
+    if req.action == "generate":
+        raise HTTPException(status_code=400, detail="Invalid action. Use /api/scout/generate-draft for generation.")
+
     from app.core.actions import DraftActionsEngine
     engine = DraftActionsEngine(db)
     return engine.handle_action(
@@ -125,6 +319,328 @@ def handle_draft_action(req: ActionRequest, db: Client = Depends(get_db)):
         draft_content=req.draft_content,
         draft_subject=req.draft_subject
     )
+
+# --- SCOUT GENERATION (Atomic Single-Brain) ---
+class GenerateDraftRequest(BaseModel):
+    dossier_id: str
+    force_regenerate: bool = False
+
+@app.post("/api/scout/generate-draft")
+def generate_draft_endpoint(
+    req: GenerateDraftRequest, 
+    x_scout_internal_secret: Annotated[str | None, Header()] = None,
+    x_debug_llm: Annotated[str | None, Header()] = None,
+    authorization: Annotated[str | None, Header()] = None, # For Session Auth Compat
+    db: Client = Depends(get_db),
+    admin_db: Client = Depends(get_service_db)
+):
+    from app.core.draft_engine import DraftEngine, DraftConcurrencyError
+    from app.core.auth_clerk import clerk_verifier
+    import traceback
+    import uuid
+
+    # 1. Truth Protocol V2: Hybrid Auth (Secret OR Clerk OR Supabase)
+    is_authorized = False
+    use_admin_db = False
+    
+    # A. Check Secret (Internal)
+    if settings.SCOUT_INTERNAL_SECRET and x_scout_internal_secret == settings.SCOUT_INTERNAL_SECRET:
+        is_authorized = True
+        use_admin_db = True # Secrets imply trusted internal access
+    
+    # B. Check Session (Clerk or Supabase)
+    if not is_authorized and authorization:
+        token = authorization.replace("Bearer ", "").strip()
+        
+        # B1. Try Clerk (Primary Strategy)
+        try:
+            from app.core.identity_bridge import IdentityBridge
+            from app.core.auth_clerk import clerk_verifier
+            
+            # 1. Verify
+            claims = clerk_verifier.verify_token(token)
+            
+            # 2. Resolve/Auto-Link
+            bridge = IdentityBridge(admin_db)
+            user_context = bridge.resolve_user(claims)
+            
+            logger.info(f"Clerk Auth Success: {user_context['email']} (ID: {user_context['user_id']})")
+            is_authorized = True
+            use_admin_db = True 
+        except Exception as clerk_err:
+            # logger.debug(f"Clerk attempt failed: {clerk_err}")
+            # B2. Try Supabase (Legacy Fallback)
+            try:
+                user = db.auth.get_user(token)
+                if user and user.user:
+                    is_authorized = True
+                    use_admin_db = False # RLS works for legacy
+            except:
+                pass 
+
+    # Final Gate
+    if not is_authorized:
+        # If Secret Required Enforced (Phase 2) OR no method worked
+        if settings.SCOUT_INTERNAL_SECRET_REQUIRED:
+            logger.warning(f"Unauthorized Draft Gen Attempt (Strict). Dossier: {req.dossier_id}")
+            return error_response(401, "unauthorized", "Internal Secret Required")
+        
+        # Phase 1 Logic:
+        # If secret was provided but Wrong -> 403 (Don't fall through)
+        if x_scout_internal_secret:
+             logger.warning(f"Unauthorized Draft Gen Attempt (Invalid Secret). Dossier: {req.dossier_id}")
+             return error_response(403, "forbidden", "Invalid Internal Secret")
+
+        # If just generic unauthorized (Phase 1 checks)
+        if not authorization:
+             logger.warning(f"Unauthorized Draft Gen Attempt (Missing Auth). Dossier: {req.dossier_id}")
+             return error_response(401, "unauthorized", "Authentication Required")
+
+    # Select Engine DB Context
+    target_db = admin_db if use_admin_db else db
+    engine = DraftEngine(target_db)
+    
+    # 2. Diagnostic Bypass
+    # x-debug-llm: 1 forces regeneration
+    force = req.force_regenerate
+    if x_debug_llm == "1":
+        force = True
+        logger.warning(f"Diagnostic Bypass Active for Dossier {req.dossier_id}")
+
+    try:
+        # 3. Execute Atomic Generation
+        # This handles Lock, Idempotency, Generation, Commit internally
+        output = engine.generate_draft_atomic(req.dossier_id, force_regenerate=force)
+        
+        # 4. Map Response Status & Headers
+        if output.status == "cached":
+            return JSONResponse(status_code=200, content={
+                "dossier_id": req.dossier_id,
+                "subject": output.subject,
+                "body_clean": output.body_clean,
+                "signature_block": output.signature_block,
+                "body_with_signature": output.body_with_signature,
+                "status": "cached",
+                "cached": True,
+                "trace_id": output.metadata.get("request_trace_id")
+            })
+
+        # 5. Success (200) with Proof Headers
+        proof = output.metadata.get("proof", {})
+        headers = {
+            "x-request-trace": output.metadata.get("prompt_trace", {}).get("request_id", "unknown"),
+            "x-llm-status": "success",
+            "x-llm-model": proof.get("model", "unknown"),
+            "x-llm-latency-ms": str(proof.get("latency_ms", 0)),
+            "x-llm-tokens-out": str(proof.get("tokens", "N/A"))
+        }
+
+        return JSONResponse(
+            status_code=200, 
+            headers=headers,
+            content={
+                "dossier_id": req.dossier_id,
+                "subject": output.subject,
+                "body_clean": output.body_clean,
+                "signature_block": output.signature_block,
+                "body_with_signature": output.body_with_signature,
+                "status": "ready",
+                "cached": False,
+                "trace_id": output.metadata.get("prompt_trace", {}).get("request_id")
+            }
+        )
+        
+    except DraftConcurrencyError as e:
+         return error_response(409, "conflict", str(e))
+
+    except ValueError as e:
+         return error_response(404, "not_found", str(e))
+
+    except Exception as e:
+         # 6. Secure Fail Loud
+         # Log RAW Exception Server-Side
+         err_id = str(uuid.uuid4())
+         logger.error(f"[Fault {err_id}] DRAFT CRASH: {e}\n{traceback.format_exc()}")
+         
+         # Return Sanitized Client-Side Error (500)
+         return JSONResponse(
+             status_code=500,
+             content={
+                 "error": "llm_call_failed",
+                 "trace_id": err_id,
+                 "message": "Upstream generation failed. Check server logs."
+             }
+         )
+
+
+# --- ADMIN ENDPOINTS (Ironclad v250) ---
+
+
+class InviteRequest(BaseModel):
+    email: str
+
+
+# --- REFACTORED ADMIN INVITE (JSON Safety) ---
+@app.post("/api/admin/invite")
+def admin_invite_user(
+    req: InviteRequest, 
+    authorization: Annotated[str | None, Header()] = None,
+    db: Client = Depends(get_db)
+):
+    from app.config import settings
+    from fastapi.responses import JSONResponse
+    
+    try:
+        # 1. Auth Guard (Verify JWT)
+        if not authorization:
+            return JSONResponse(status_code=401, content={"ok": False, "error": "Missing Authorization Header"})
+        
+        token = authorization.replace("Bearer ", "")
+        
+        # Verify User via Supabase GoTrue
+        try:
+            user_response = db.auth.get_user(token)
+            user_id = user_response.user.id
+            logger.info(f"Admin Invite: Authenticated User {user_id}")
+        except Exception as e:
+            logger.warning(f"Auth Failed: {e}")
+            return JSONResponse(status_code=401, content={"ok": False, "error": "Invalid Token", "detail": str(e)})
+
+        # Initialize Admin Client (Service Role) - Moved UP to use for Profile Check
+        if not settings.SUPABASE_SERVICE_ROLE_KEY:
+            logger.error("Missing SUPABASE_SERVICE_ROLE_KEY for Admin Operation")
+            return JSONResponse(status_code=500, content={"ok": False, "error": "Configuration Error", "detail": "Service Key Missing"})
+
+        admin_db = create_client(
+            settings.SUPABASE_URL, 
+            settings.SUPABASE_SERVICE_ROLE_KEY,
+            options=ClientOptions(flow_type="implicit")
+        )
+
+        # 2. Role Guard (Check Profile via Service Role)
+        # We use admin_db to bypass RLS (Anon client fails here due to lack of auth context)
+        try:
+            profile_res = admin_db.table("profiles").select("role, org_id").eq("id", user_id).single().execute()
+            if not profile_res.data:
+                 return JSONResponse(status_code=403, content={"ok": False, "error": "Access Denied", "detail": "No Profile Found"})
+            
+            profile = profile_res.data
+            if profile.get("role") != "admin":
+                logger.warning(f"Unauthorized Admin Access Attempt by {user_id} (Role: {profile.get('role')})")
+                return JSONResponse(status_code=403, content={"ok": False, "error": "Access Denied", "detail": "Admins Only"})
+            
+            org_id = profile.get("org_id")
+            logger.info(f"Admin Invite: Role Verified. Org: {org_id}")
+
+        except Exception as e:
+            logger.error(f"Profile Check Failed: {e}")
+            return JSONResponse(status_code=500, content={"ok": False, "error": "Database Error (Profile Check)", "detail": str(e)})
+
+        # 3. Action (Service Role Execution)
+        # admin_db already initialized
+
+        
+        # A. Supabase Invite (Sends Email)
+        # A. Supabase Invite (Sends Email)
+        invite_result_id = None
+        try:
+            invite_metadata = {
+                "org_id": org_id, 
+                "role": "member", 
+                "full_name": req.email.split("@")[0]
+            }
+            logger.info(f"Sending Supabase Invite to {req.email} with metadata: {invite_metadata}")
+            
+            # AUTH_REDIRECT: Single source of truth for all email links (Invite & Recovery)
+            # PM Directive: "redirect_to must be .../auth/callback" WITH "next=/auth/update-password" hint
+            # This allows the frontend to route to the update password page after the callback exchange.
+            AUTH_REDIRECT = "https://v0-scout-ui.vercel.app/auth/callback?next=/auth/update-password"
+            
+            logger.info(f"Preparing Invite/Recovery for {req.email}. Redirect Target: {AUTH_REDIRECT}")
+            
+            action_status = "invited"
+
+            try:
+                # 1. Try Invite
+                logger.info(f"Attempting Invite. redirect_to={AUTH_REDIRECT}")
+                invite_res = admin_db.auth.admin.invite_user_by_email(
+                    req.email, 
+                    options={
+                        "data": invite_metadata,
+                        "redirect_to": AUTH_REDIRECT
+                    }
+                )
+                if invite_res and invite_res.user:
+                     invite_result_id = invite_res.user.id
+                logger.info(f"Supabase Invite Success used redirect_to={AUTH_REDIRECT}. User ID: {invite_result_id}")
+                
+            except Exception as e:
+                # Check if error is "User already registered"
+                error_str = str(e).lower()
+                if "already registered" in error_str or "user already exists" in error_str:
+                    logger.info(f"User {req.email} already exists. Sending Password Reset instead.")
+                    
+                    # 2. Fallback: Password Recovery
+                    logger.info(f"Attempting Recovery. redirect_to={AUTH_REDIRECT}")
+                    admin_db.auth.reset_password_email(
+                        req.email,
+                        options={"redirect_to": AUTH_REDIRECT}
+                    )
+                    action_status = "recovery_sent"
+                    
+                    # We don't get a User ID back easily here without querying
+                    user_res = admin_db.table("profiles").select("id").eq("email", req.email).single().execute()
+                    if user_res.data:
+                        invite_result_id = user_res.data.get("id")
+                    
+                    logger.info(f"Password Reset Email Sent using redirect_to={AUTH_REDIRECT}")
+                else:
+                    # Genuine error
+                    raise e
+
+            
+        except Exception as e:
+            logger.error(f"Invite/Reset Failed: {e}")
+            # Return detailed error
+            return JSONResponse(status_code=400, content={"ok": False, "error": "Invite Failed", "detail": str(e), "where": "inviteUserByEmail"})
+
+        # B. Audit Log (Insert into public.invites)
+        try:
+            db_payload = {
+                "email": req.email,
+                "org_id": org_id,
+                "role": "member", 
+                "status": "pending",
+                "created_by": user_id,
+                "supabase_invite_id": invite_result_id
+            }
+            logger.info(f"Logging invite to database 'invites'. Payload: {db_payload}")
+            
+            admin_db.table("invites").upsert(db_payload).execute()
+            logger.info("Audit Log Created.")
+
+        except Exception as e:
+            # Don't fail the request if audit fails, but log it critical
+            logger.critical(f"Failed to write to invites table: {e}")
+            # We return success because the invite WAS sent
+            return JSONResponse(status_code=200, content={
+                "ok": True, 
+                "status": action_status,
+                "message": f"Invite sent to {req.email} ({action_status})", 
+                "warning": "Audit log failed", 
+                "audit_error": str(e)
+            })
+
+        return JSONResponse(status_code=200, content={
+            "ok": True, 
+            "status": action_status,
+            "message": f"Invite flow complete for {req.email}", 
+            "email": req.email
+        })
+
+    except Exception as e:
+        logger.critical(f"Unhandled Server Error in Admin Invite: {e}")
+        return JSONResponse(status_code=500, content={"ok": False, "error": "Internal Server Error", "detail": str(e)})
 
 # --- OUTLOOK PROBE ENDPOINTS ---
 @app.get("/api/outlook/auth-url")
@@ -235,3 +751,21 @@ def test_outlook_connection(
         "mode": "live" if settings.ALLOW_REAL_SEND else "test_read_only", 
         "scopes_grant_status": "Admin Consent Likely Not Required" 
     }
+
+# --- ROUTING ALIASES (Ironclad v255) ---
+# Support frontend middleware requests to /api/scout/outlook/*
+@app.get("/api/scout/outlook/auth-url")
+def get_outlook_auth_url_alias():
+    return get_outlook_auth_url()
+
+@app.get("/api/scout/outlook/callback")
+def outlook_callback_alias(code: str, db: Client = Depends(get_db)):
+    return outlook_callback(code, db)
+
+@app.get("/api/scout/outlook/test-connection")
+def test_outlook_connection_alias(
+    email: str, 
+    x_scout_internal_probe: Annotated[str | None, Header()] = None,
+    db: Client = Depends(get_db)
+):
+    return test_outlook_connection(email, x_scout_internal_probe, db)

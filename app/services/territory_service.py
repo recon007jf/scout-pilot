@@ -5,12 +5,10 @@ import time
 import requests
 import json
 from datetime import datetime
-from dotenv import load_dotenv
-
-load_dotenv()
+from app.config import settings
 
 DB_PATH = "leads_pilot.db"
-GOOGLE_MAPS_SERVER_KEY = os.getenv("GOOGLE_MAPS_SERVER_KEY")
+# GOOGLE_MAPS_SERVER_KEY removed (accessed via settings)
 
 class TerritoryService:
     def __init__(self, db_path=DB_PATH):
@@ -126,7 +124,7 @@ class TerritoryService:
             return {"success": True, "cached": True}
 
         # Call API
-        if not GOOGLE_MAPS_SERVER_KEY:
+        if not settings.GOOGLE_MAPS_SERVER_KEY:
             # Non-blocking failure - just log and return
             print(f"⚠️  Skipping Lead {lead_id}: GOOGLE_MAPS_SERVER_KEY not found in environment.")
             return {"success": False, "error": "Missing API Key"}
@@ -135,7 +133,7 @@ class TerritoryService:
             url = "https://maps.googleapis.com/maps/api/geocode/json"
             params = {
                 "address": address_string,
-                "key": GOOGLE_MAPS_SERVER_KEY
+                "key": settings.GOOGLE_MAPS_SERVER_KEY
             }
             response = requests.get(url, params=params)
             data = response.json()

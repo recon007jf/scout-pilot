@@ -770,7 +770,25 @@ def test_outlook_connection(
 # Support frontend middleware requests to /api/scout/outlook/*
 @app.get("/api/scout/outlook/auth-url")
 def get_outlook_auth_url_alias():
-    return get_outlook_auth_url()
+    try:
+        return get_outlook_auth_url()
+    except Exception as e:
+        logger.error(f"Outlook Auth URL Generation Failed: {e}")
+        # Diagnostic Response for debugging 500 errors
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "Outlook Auth Generation Failed",
+                "details": str(e),
+                "diagnostics": {
+                    "AZURE_CLIENT_ID_SET": bool(settings.AZURE_CLIENT_ID),
+                    "AZURE_CLIENT_SECRET_SET": bool(settings.AZURE_CLIENT_SECRET),
+                    "AZURE_TENANT_ID": settings.AZURE_TENANT_ID,
+                    "AZURE_REDIRECT_URI": settings.AZURE_REDIRECT_URI,
+                    "ENV": settings.ENV
+                }
+            }
+        )
 
 @app.get("/api/scout/outlook/callback")
 def outlook_callback_alias(code: str, db: Client = Depends(get_db)):

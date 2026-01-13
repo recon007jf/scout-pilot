@@ -22,6 +22,17 @@ def get_service_db():
         options=ClientOptions(flow_type="implicit")
     )
 
+# --- CORS MIDDLEWARE (FIX) ---
+from fastapi.middleware.cors import CORSMiddleware
+origins = settings.ALLOWED_ORIGINS.split(",")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.get("/health")
 def health_check():
     return {"status": "ok", "version": "2.2 (Clerk Pivot)", "env": settings.ENV}

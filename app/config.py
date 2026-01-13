@@ -27,7 +27,12 @@ class Settings(BaseSettings):
     # Internal Probe Security
     SCOUT_INTERNAL_PROBE_KEY: str = ""
     SCOUT_INTERNAL_SECRET: str = "" # Required for generate-draft endpoint
+    SCOUT_INTERNAL_PROBE_KEY: str = ""
+    SCOUT_INTERNAL_SECRET: str = "" # Required for generate-draft endpoint
     SCOUT_INTERNAL_SECRET_REQUIRED: bool = False # Phase 1: Compat Mode (False). Set True for Phase 2.
+    
+    # CORS
+    ALLOWED_ORIGINS: str = os.getenv("ALLOWED_ORIGINS") or "https://scout-ui.vercel.app,http://localhost:3000,https://v0-scout-ui.vercel.app"
     
     # Clerk Auth
     # Map NEXT_PUBLIC_... to this field

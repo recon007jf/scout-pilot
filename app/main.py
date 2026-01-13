@@ -682,7 +682,10 @@ def outlook_callback(code: str, db: Client = Depends(get_db)):
         "refresh_token": refresh
     }, on_conflict="user_email, provider").execute()
     
-    return "Connection Established. Implementation: Operational."
+    # Return to Frontend
+    from fastapi.responses import RedirectResponse
+    # TODO: Use ALLOWED_ORIGINS config in future. Hardcoded for stability.
+    return RedirectResponse("https://v0-scout-ui.vercel.app/settings?status=success&provider=outlook")
 
 @app.get("/api/outlook/test-connection")
 def test_outlook_connection(

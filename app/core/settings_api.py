@@ -1,5 +1,5 @@
 from supabase import Client
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from app.utils.logger import get_logger
 
 logger = get_logger("settings")

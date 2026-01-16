@@ -14,10 +14,11 @@ class SafetyEngine:
     def __init__(self, db: Client):
         self.db = db
 
-    def get_outreach_status(self, current_time: datetime = None):
+    def get_outreach_status(self, current_time: datetime = None, user_email: str = None):
         """
         Returns the current global status.
         Auto-resumes if paused and now > resume_at.
+        Includes Outlook connection status if user_email is provided.
         """
         if not current_time:
             current_time = datetime.utcnow() # timezone naive assumption for MVP, UTC
@@ -61,6 +62,16 @@ class SafetyEngine:
                     # Fail closed
                     return {"status": "paused", "error": str(e)}
 
+            # Check Outlook Status if user_email provided
+            outlook_connected = False
+            if user_email:
+                 # Check integration_tokens table
+                 # We are in SafetyEngine, self.db is admin_db (Service Role) so we can read this table
+                 token_res = self.db.table("integration_tokens").select("id").eq("user_email", user_email).eq("provider", "outlook").execute()
+                 if token_res.data:
+                     outlook_connected = True
+
+            state["outlook_connected"] = outlook_connected
             return state
             
         except Exception as e:

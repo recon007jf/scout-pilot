@@ -17,8 +17,11 @@ class BriefingEngine:
         """
         briefing_targets = []
         tier_counts = {"Warm": 0, "Cold-Safe": 0, "High-Risk": 0}
+
+
         
         # 1. Fetch Warm
+
         warm = self.db.table("psyche_profiles").select("*, dossiers(*)").eq("risk_profile", "Warm").limit(5).execute()
         for row in warm.data:
             briefing_targets.append(row)

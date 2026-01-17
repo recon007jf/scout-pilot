@@ -712,14 +712,32 @@ def outlook_callback(code: str, db: Client = Depends(get_db)):
     expires_at = datetime.datetime.utcnow() + datetime.timedelta(seconds=expires_in)
     scopes = token.get("scope", "")
 
+    # 3a. Save Core Tokens
     db.table("integration_tokens").upsert({
         "user_email": email,
         "provider": "outlook",
         "access_token": access,
-        "refresh_token": refresh,
-        "scopes": scopes,
-        "expires_at": expires_at.isoformat()
+        "refresh_token": refresh
     }, on_conflict="user_email, provider").execute()
+
+    # 3b. Save Metadata to Preferences (Schema workaround)
+    try:
+        pref_res = db.table("user_preferences").select("*").eq("user_email", email).execute()
+        current_prefs = pref_res.data[0].get("preferences", {}) if pref_res.data else {}
+        
+        outlook_meta = current_prefs.get("outlook", {})
+        outlook_meta["scopes"] = scopes
+        outlook_meta["expires_at"] = expires_at.isoformat()
+        current_prefs["outlook"] = outlook_meta
+        
+        db.table("user_preferences").upsert({
+            "user_email": email,
+            "preferences": current_prefs,
+            "updated_at": "now()"
+        }).execute()
+    except Exception as e:
+        # Don't fail the connection if metadata save fails
+        print(f"Metadata save failed: {e}")
     
     # Return to Frontend
     from fastapi.responses import RedirectResponse

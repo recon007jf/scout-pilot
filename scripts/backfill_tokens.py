@@ -55,9 +55,24 @@ def backfill_tokens(user_email: str):
         print("✅ Data already complete. No backfill needed.")
         return
 
-    # 3. Apply Update
-    db.table("integration_tokens").update(updates).eq("id", record['id']).execute()
-    print("✅ Backfill Complete.")
+    # 3. Apply Update to User Preferences (Start of workaround)
+    # Fetch existing prefs
+    pref_res = db.table("user_preferences").select("*").eq("user_email", user_email).execute()
+    current_prefs = pref_res.data[0].get("preferences", {}) if pref_res.data else {}
+    
+    # Merge Outlook metadata
+    outlook_meta = current_prefs.get("outlook", {})
+    outlook_meta["scopes"] = inferred_scopes
+    outlook_meta["expires_at"] = updates.get("expires_at", datetime.datetime.utcnow().isoformat())
+    current_prefs["outlook"] = outlook_meta
+    
+    # Upsert Preferences
+    db.table("user_preferences").upsert({
+        "user_email": user_email,
+        "preferences": current_prefs,
+        "updated_at": "now()"
+    }).execute()
+    print("✅ Backfill Complete (User Preferences updated).")
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

@@ -37,13 +37,19 @@ def validate_outlook_connection(user_email: str):
     record = res.data[0]
     access_token = record.get("access_token")
     refresh_token = record.get("refresh_token")
-    scopes = record.get("scopes")
-    expires_at_str = record.get("expires_at")
+    
+    # Check Metadata from User Preferences (Workaround for Schema Lock)
+    pref_res = db.table("user_preferences").select("*").eq("user_email", user_email).execute()
+    prefs = pref_res.data[0].get("preferences", {}) if pref_res.data else {}
+    outlook_meta = prefs.get("outlook", {})
+    
+    scopes = outlook_meta.get("scopes") or record.get("scopes")
+    expires_at_str = outlook_meta.get("expires_at") or record.get("expires_at")
     
     print(f"   - Access Token: {'[PRESENT]' if access_token else '[MISSING]'}")
     print(f"   - Refresh Token: {'[PRESENT]' if refresh_token else '[MISSING]'}")
     print(f"   - Scopes: {scopes}")
-    print(f"   - Expires At: {expires_at_str}")
+    print(f"   - Expires At: {expires_at_str} (Source: {'UserPrefs' if outlook_meta.get('expires_at') else 'TokensTable'})")
 
     if not access_token or not refresh_token:
         print("❌ Fail: Missing tokens.")

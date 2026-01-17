@@ -242,6 +242,35 @@ def get_signals(
         logger.error(f"Signals Error: {e}")
         return error_response(500, "server_error", "Failed to fetch signals", {"raw": str(e)})
 
+@app.get("/api/image-proxy")
+def proxy_image(url: str):
+    """
+    Proxies image requests to bypass Hotlink Protection / CORS.
+    Streamed directly to client.
+    """
+    import requests
+    from fastapi.responses import StreamingResponse
+    
+    try:
+        # Masquerade as a browser
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Referer": "https://www.google.com/"
+        }
+        
+        # Stream content (don't load fully into RAM if large, though avatars are small)
+        r = requests.get(url, headers=headers, stream=True, timeout=10)
+        r.raise_for_status()
+        
+        return StreamingResponse(
+            r.iter_content(chunk_size=8192), 
+            media_type=r.headers.get("content-type", "image/jpeg")
+        )
+    except Exception as e:
+        logger.error(f"Image Proxy Failed for {url}: {e}")
+        # Return 404/green pixel or just error
+        raise HTTPException(status_code=404, detail="Image not found")
+
 @app.get("/api/profile-image")
 def get_profile_image(name: str, company: str):
     from app.core.image_proxy import ImageProxyEngine

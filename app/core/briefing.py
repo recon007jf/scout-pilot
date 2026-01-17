@@ -45,27 +45,50 @@ class BriefingEngine:
                 risk_bucket = "Warm" 
                 tier_counts[risk_bucket] += 1
                 
+                # Phase 2: Schema Alignment with Frontend (BriefingTarget)
+                # We synthesis missing fields (Sponsor/Persona) with safe defaults to unblock UI.
+                
                 target = {
-                    "id": candidate.get("id"), # Use Candidate ID as primary ref
-                    "full_name": candidate.get("full_name"),
-                    "firm": candidate.get("firm"),
-                    "role": candidate.get("role"),
-                    "email": candidate.get("email"),
-                    "linkedin_url": candidate.get("linkedin_url"),
-                    "risk_profile": risk_bucket,
-                    
-                    # Logic Proofs (The "Why")
-                    "ranking_reason": item.get("ranking_reason"), 
-                    
-                    # Draft Content (The Contract)
-                    # We pass it as 'dossiers' because legacy UI might look there,
-                    # OR we pass it as 'draft_data'. 
-                    # Providing both for safety.
-                    "draft_body": candidate.get("draft_body") or item.get("draft_preview"),
-                    "dossiers": { 
-                        "id": "mock_v0", # Prevent crash if UI checks ID
-                        "generated_draft": candidate.get("draft_body") or item.get("draft_preview")
-                    }
+                    "targetId": candidate.get("id"), # Frontend expects targetId
+                    "broker": {
+                         "name": candidate.get("full_name"),
+                         "title": candidate.get("role") or "Unknown Role",
+                         "firm": candidate.get("firm") or "Unknown Firm",
+                         "email": candidate.get("email") or "",
+                         "phone": "",
+                         "linkedIn": candidate.get("linkedin_url") or "",
+                         "avatar": candidate.get("linkedin_image_url") or "", # Use Image as Avatar
+                         "imageUrl": candidate.get("linkedin_image_url") # Explicit Field
+                    },
+                    "sponsor": {
+                        "name": candidate.get("firm"), # Sponsor often == Firm for simple matching
+                        "industry": "Insurance", # Default
+                        "revenue": "Unknown",
+                        "employees": 0,
+                        "location": "Unknown"
+                    },
+                    "businessPersona": {
+                        "type": "Standard Profile", # Default
+                        "description": item.get("ranking_reason") or "Algorithm Match",
+                        "decisionStyle": "Analytical",
+                        "communicationPreference": "Email"
+                    },
+                    "dossier": { 
+                        "lastContact": "Never",
+                        "relationshipScore": 50,
+                        "previousInteractions": 0,
+                        "keyNotes": []
+                    },
+                    "signals": [],  # Empty for Phase 1
+                    "draft": {
+                        "subject": (candidate.get("draft_body") or "Subject: Connect").split("\n")[0],
+                        "body": candidate.get("draft_body") or item.get("draft_preview") or "",
+                        "generatedAt": item.get("created_at"),
+                        "version": 1
+                    },
+                    "status": "pending_review", # Default State
+                    "priority": item.get("priority_score") or 50,
+                    "createdAt": item.get("created_at")
                 }
                 briefing_targets.append(target)
                 

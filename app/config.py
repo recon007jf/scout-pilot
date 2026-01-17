@@ -6,6 +6,16 @@ from app.utils.logger import get_logger
 
 logger = get_logger("config")
 
+
+try:
+    from dotenv import load_dotenv
+    # Explicitly load .env from scratch/backend/.env
+    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    load_dotenv(env_path)
+    logger.info(f"Loaded .env from {env_path}")
+except Exception as e:
+    logger.critical(f"Env Load Failed: {e}")
+
 class Settings(BaseSettings):
     # Supabase
     SUPABASE_URL: str
@@ -25,8 +35,6 @@ class Settings(BaseSettings):
     AZURE_REDIRECT_URI: str = os.getenv("AZURE_REDIRECT_URI") or os.getenv("OUTLOOK_REDIRECT_URI") or "https://scout-backend-prod-283427197752.us-central1.run.app/api/outlook/callback"
     
     # Internal Probe Security
-    SCOUT_INTERNAL_PROBE_KEY: str = ""
-    SCOUT_INTERNAL_SECRET: str = "" # Required for generate-draft endpoint
     SCOUT_INTERNAL_PROBE_KEY: str = ""
     SCOUT_INTERNAL_SECRET: str = "" # Required for generate-draft endpoint
     SCOUT_INTERNAL_SECRET_REQUIRED: bool = False # Phase 1: Compat Mode (False). Set True for Phase 2.
@@ -63,14 +71,5 @@ class Settings(BaseSettings):
         env_file_encoding = 'utf-8'
         extra = "ignore" # Ignore extra env vars
 
-try:
-    from dotenv import load_dotenv
-    # Explicitly load .env from scratch/backend/.env
-    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
-    load_dotenv(env_path)
-    logger.info(f"Loaded .env from {env_path}")
-    
-    settings = Settings()
-except ValidationError as e:
-    logger.critical(f"Configuration Validation Failed: {e}", extra={"component": "config"})
-    sys.exit(1)
+settings = Settings()
+

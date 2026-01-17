@@ -60,8 +60,11 @@ def validate_outlook_connection(user_email: str):
     
     # Check expiry
     if expires_at_str:
-        expires_at = datetime.datetime.fromisoformat(expires_at_str.replace('Z', '+00:00'))
-        is_expired = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc) > expires_at
+        # Standardize on Naive UTC
+        expires_at = datetime.datetime.fromisoformat(expires_at_str.replace('Z', '')).replace(tzinfo=None)
+        now = datetime.datetime.utcnow().replace(tzinfo=None)
+        
+        is_expired = now > expires_at
         if is_expired:
              print("⚠️ Warning: Token appears expired in DB. Refresh logic should handle this.")
         else:

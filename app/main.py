@@ -707,14 +707,18 @@ def outlook_callback(code: str, db: Client = Depends(get_db)):
     access = token.get("access_token")
     refresh = token.get("refresh_token")
     
-    # Calculate expiry? MSAL handles it, but for DB we might want it.
-    # Ignoring exact expiry for Probe.
-    
+    expires_in = token.get("expires_in", 3600)
+    import datetime
+    expires_at = datetime.datetime.utcnow() + datetime.timedelta(seconds=expires_in)
+    scopes = token.get("scope", "")
+
     db.table("integration_tokens").upsert({
         "user_email": email,
         "provider": "outlook",
         "access_token": access,
-        "refresh_token": refresh
+        "refresh_token": refresh,
+        "scopes": scopes,
+        "expires_at": expires_at.isoformat()
     }, on_conflict="user_email, provider").execute()
     
     # Return to Frontend

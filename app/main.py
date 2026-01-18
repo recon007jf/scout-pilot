@@ -8,7 +8,7 @@ from app.core.safety import SafetyEngine
 from supabase import create_client, Client, ClientOptions
 
 logger = get_logger("api")
-app = FastAPI(title="Scout Backend (Iron Clad)", version="2.1 (Nuke)")
+app = FastAPI(title="Scout Backend (Iron Clad)", version="2.3 (Image Proxy Fix)")
 
 # DB Dependency (Anon/User)
 def get_db():
@@ -35,7 +35,21 @@ app.add_middleware(
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "version": "2.2 (Clerk Pivot)", "env": settings.ENV}
+    """
+    Standard Deployment Contract (Phase 2.5)
+    Used by Frontend Version Gate to detect stale clients.
+    """
+    return {
+        "status": "ok", 
+        "api_version": "2.3",  # Matches app.version
+        "schema_version": "2026-01-17",
+        "env": settings.ENV,
+        "features": {
+            "image_proxy": True,
+            "clerk_auth": True,
+            "morning_briefing_v2": True
+        }
+    }
 
 @app.get("/health/auth")
 def health_check_auth():

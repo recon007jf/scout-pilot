@@ -6,29 +6,43 @@ from app.utils.logger import get_logger
 logger = get_logger("image_proxy")
 
 class ImageProxyEngine:
-    SERPER_URL = "https://google.serper.dev/images"
+    SERPER_URL = "https://google.serper.dev/search" # SWITCH TO STANDARD SEARCH
 
     def __init__(self):
         self.api_key = settings.SERPER_API_KEY
 
     def fetch_image(self, name: str, company: str, linkedin_url: Optional[str] = None) -> Dict[str, Any]:
         """
-        Proxies request to Serper to find a profile image.
-        Prioritizes freshness and relevance.
+        Retrieves profile image using Serper Google Search API (Jan 17 Protocol).
+        Source: https://google.serper.dev/search
+        
+        Logic:
+        1. Query: site:linkedin.com/in/ "Name" "Company" (or similar intent)
+        2. Order: 
+           a. KnowledgeGraph.imageUrl
+           b. Organic[0].imageUrl
         """
         if not self.api_key:
             logger.warning("SERPER_API_KEY is not set.")
             return {"imageUrl": None, "error": "API Key Missing"}
 
         # Construct Query
-        # If LinkedIn URL is present, maybe use it? But Serper Images works best with text keywords.
-        # "Name Company LinkedIn" is usually the strongest signal.
-        query = f"{name} {company} LinkedIn professional headshot"
+        # User Directive: site:linkedin.com/in/ "First Last" "Company"
+        # We try to adhere to this, but might fallback if strict site: filter kills KG.
+        # However, purely strict compliance first:
+        query = f'site:linkedin.com/in/ "{name}" "{company}"'
+        
+        # NOTE: If we find that site: operator kills Knowledge Graph (likely), 
+        # we might need to adjust creating the query to just 'Name Company LinkedIn' 
+        # to get the KG, while still satisfying the "LinkedIn signal" requirement.
+        # Let's trust the "Intent" > "Syntax" if syntax fails in tests.
+        # But for now, putting the Strict Query.
         
         payload = {
             "q": query,
-            "num": 1,        # We only need the top result
-            "autocorrect": True
+            "num": 1,
+            "gl": "us",
+            "hl": "en"
         }
         
         headers = {
@@ -41,15 +55,22 @@ class ImageProxyEngine:
             response.raise_for_status()
             data = response.json()
             
-            images = data.get("images", [])
-            if images:
-                # Return top result
-                return {"imageUrl": images[0].get("imageUrl")}
-            else:
-                return {"imageUrl": None, "reason": "No results found"}
+            # Extraction Logic (Strict Order)
+            
+            # 1. Knowledge Graph
+            kg = data.get("knowledgeGraph", {})
+            if kg.get("imageUrl"):
+                return {"imageUrl": kg.get("imageUrl"), "source": "knowledge_graph"}
+                
+            # 2. Organic Result #1
+            organic = data.get("organic", [])
+            if organic:
+                first_result = organic[0]
+                if first_result.get("imageUrl"):
+                    return {"imageUrl": first_result.get("imageUrl"), "source": "organic_0"}
+                    
+            return {"imageUrl": None, "reason": "No image in KG or Organic[0]"}
 
         except Exception as e:
-            logger.error(f"Serper API Failed: {e}")
-            # Do not crash, just return null image embedded in success response or error code
-            # V0 expects a working endpoint. Null image is safer.
+            logger.error(f"Serper Search API Failed: {e}")
             return {"imageUrl": None, "error": str(e)}

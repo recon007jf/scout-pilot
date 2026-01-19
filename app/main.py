@@ -133,22 +133,9 @@ def get_outreach_status(
     from app.core.auth_clerk import clerk_verifier
     from app.core.identity_bridge import IdentityBridge
 
-    user_email = None
-    if authorization:
-        try:
-            token = authorization.replace("Bearer ", "").strip()
-            # Try Clerk first
-            try:
-                claims = clerk_verifier.verify_token(token)
-                # Quick resolve for email only
-                user_email = claims.get("email") # or resolve via bridge if strictly needed, but claims usually have it
-            except:
-                # Fallback to Supabase
-                user = admin_db.auth.get_user(token)
-                if user and user.user:
-                    user_email = user.user.email
-        except:
-             pass
+    # MONITOR MODE: Force check for Andrew's account to allow remote monitoring
+    # regardless of who is logged in (Joseph or Andrew).
+    user_email = "andrew.oram@pointchealth.com"
 
     safety = SafetyEngine(admin_db)
     return safety.get_outreach_status(user_email=user_email)
@@ -791,31 +778,68 @@ def outlook_callback(code: str, db: Client = Depends(get_db)):
 def test_outlook_connection(
     email: str, 
     x_scout_internal_probe: Annotated[str | None, Header()] = None,
-    db: Client = Depends(get_db)
+    authorization: Annotated[str | None, Header()] = None,
+    db: Client = Depends(get_db),
+    admin_db: Client = Depends(get_service_db) # Need admin_db for identity resolution
 ):
     """
     Manually triggers a draft creation for the given user email.
-    Secured by SCOUT_INTERNAL_PROBE_KEY.
+    Secured by SCOUT_INTERNAL_PROBE_KEY OR Valid Session.
     """
     from app.core.outlook import OutlookAuth, OutlookClient
     from app.config import settings
     
-    # Security Gate: Internal Header Check
-    if not settings.SCOUT_INTERNAL_PROBE_KEY or x_scout_internal_probe != settings.SCOUT_INTERNAL_PROBE_KEY:
-         logger.warning(f"Unauthorized Outlook Probe Attempt. User: {email}")
-         raise HTTPException(status_code=403, detail="Access Denied: Internal Probe Key Required")
+    # 1. Auth Gate: Check Secret OR Session
+    is_authorized = False
     
-    # 1. Fetch Credentials
+    # A. Internal Secret
+    if settings.SCOUT_INTERNAL_PROBE_KEY and x_scout_internal_probe == settings.SCOUT_INTERNAL_PROBE_KEY:
+        is_authorized = True
+    
+    # B. User Session (Allow Dashboard "Test Connection" Button)
+    if not is_authorized and authorization:
+        from app.core.auth_clerk import clerk_verifier
+        try:
+            token = authorization.replace("Bearer ", "").strip()
+            # Try Clerk
+            try:
+                clerk_verifier.verify_token(token)
+                is_authorized = True
+            except:
+                # Try Legacy Supabase
+                u = db.auth.get_user(token)
+                if u and u.user:
+                    is_authorized = True
+        except Exception as e:
+            logger.warning(f"Outlook Test Auth Failed: {e}")
+
+    if not is_authorized:
+         logger.warning(f"Unauthorized Outlook Probe Attempt. User: {email}")
+         raise HTTPException(status_code=403, detail="Access Denied: Internal Probe Key or Session Required")
+    
+    # 2. MONITOR MODE REDIRECT
+    # Force check for Andrew's account if configured, to allow Joseph to test Andrew's connection
+    # Matches logic in get_outreach_status
+    if email != "andrew.oram@pointchealth.com":
+         logger.info(f"Monitor Mode: Redirecting test from {email} to andrew.oram@pointchealth.com")
+         email = "andrew.oram@pointchealth.com"
+
+    # 3. Fetch Credentials
     res = db.table("integration_tokens").select("*").eq("user_email", email).eq("provider", "outlook").execute()
     if not res.data:
-        raise HTTPException(status_code=404, detail="User not authenticated")
+        raise HTTPException(status_code=404, detail=f"User {email} not authenticated with Outlook")
         
     record = res.data[0]
     refresh_token = record.get("refresh_token")
     
-    # 2. Refresh Token (Ensure validity)
+    # 4. Refresh Token (Ensure validity)
     auth = OutlookAuth()
-    new_tokens = auth.refresh_token(refresh_token)
+    try:
+        new_tokens = auth.refresh_token(refresh_token)
+    except Exception as e:
+         logger.error(f"Token Refresh Failed: {e}")
+         raise HTTPException(status_code=400, detail="Token Refresh Failed - Reconnect Outlook")
+
     access_token = new_tokens.get("access_token")
     
     # Update DB with new tokens
@@ -825,7 +849,7 @@ def test_outlook_connection(
              "refresh_token": new_tokens.get("refresh_token")
          }).eq("id", record['id']).execute()
     
-    # 3. Probe Graph API
+    # 5. Probe Graph API
     client = OutlookClient(access_token)
     
     # SAFETY: Always allow Read (GET /me) for auth verification
@@ -836,13 +860,17 @@ def test_outlook_connection(
     draft_created = False
     
     if settings.ALLOW_REAL_SEND:
-        draft = client.create_draft(
-            subject="Scout Probe: Connection Test",
-            body="<h1>Operational</h1><p>The backend has successfully connected to Outlook.</p>",
-            to_emails=[email] # Send to self
-        )
-        draft_id = draft.get("id")
-        draft_created = True
+        try:
+            draft = client.create_draft(
+                subject="Scout Probe: Connection Test",
+                body="<h1>Operational</h1><p>The backend has successfully connected to Outlook.</p>",
+                to_emails=[email] # Send to self (Andrew)
+            )
+            draft_id = draft.get("id")
+            draft_created = True
+        except Exception as e:
+            logger.error(f"Draft Create Failed: {e}")
+            raise HTTPException(status_code=500, detail=f"Graph API Draft Failed: {str(e)}")
     else:
         logger.info("SAFETY LATCH: Skipping Draft Creation for Probe")
     
@@ -856,6 +884,7 @@ def test_outlook_connection(
     }
 
 # --- ROUTING ALIASES (Ironclad v255) ---
+# FORCE DEPLOY: Kick Cloud Run
 # Support frontend middleware requests to /api/scout/outlook/*
 @app.get("/api/scout/outlook/auth-url")
 def get_outlook_auth_url_alias():
@@ -890,3 +919,13 @@ def test_outlook_connection_alias(
     db: Client = Depends(get_db)
 ):
     return test_outlook_connection(email, x_scout_internal_probe, db)
+
+@app.get("/api/scout/outlook/test")
+def test_outlook_connection_short_alias(
+    email: str,
+    x_scout_internal_probe: Annotated[str | None, Header()] = None,
+    authorization: Annotated[str | None, Header()] = None,
+    db: Client = Depends(get_db),
+    admin_db: Client = Depends(get_service_db)
+):
+    return test_outlook_connection(email, x_scout_internal_probe, authorization, db, admin_db)

@@ -916,9 +916,11 @@ def outlook_callback_alias(code: str, db: Client = Depends(get_db)):
 def test_outlook_connection_alias(
     email: str, 
     x_scout_internal_probe: Annotated[str | None, Header()] = None,
-    db: Client = Depends(get_db)
+    db: Client = Depends(get_db),
+    admin_db: Client = Depends(get_service_db)
 ):
-    return test_outlook_connection(email, x_scout_internal_probe, db)
+    # Pass None for authorization (legacy endpoint wasn't auth-aware)
+    return test_outlook_connection(email, x_scout_internal_probe, None, db, admin_db)
 
 @app.get("/api/scout/outlook/test")
 def test_outlook_connection_short_alias(

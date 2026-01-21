@@ -25,6 +25,13 @@ class DraftActionsEngine:
             }
             self.db.table("draft_decisions").insert(decision_payload).execute()
             
+            # 1b. Update Candidate Draft Content (Crucial for Edit -> Approve flow)
+            if draft_content:
+                 self.db.table("candidates").update({
+                     "draft_subject": draft_subject,
+                     "draft_body": draft_content
+                 }).eq("id", dossier_id).execute()
+            
             # 2. Handle Side Effects
             if action == "dismiss":
                 self.db.table("dossiers").update({"is_active": False}).eq("id", dossier_id).execute()

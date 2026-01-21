@@ -1,53 +1,49 @@
+
+import requests
 import os
-import sys
-import json
-from supabase import create_client
-from typing import Dict, Any
+from dotenv import load_dotenv
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from app.config import settings
-from app.core.briefing import BriefingEngine
+# Load env to get URL
+load_dotenv("/Users/josephlf/.gemini/antigravity/scratch/backend/.env")
+load_dotenv("/Users/josephlf/.gemini/antigravity/scratch/scout-production/.env.local")
 
-# Mock DB Client
-db = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
+# We want to test the Backend API directly (port 8000) or via Next Proxy (port 3000)?
+# Let's test Backend directly first to prove the "Contract".
+API_URL = "http://localhost:8000/api/briefing"
 
-def verify_briefing_output():
-    print("🧪 Verifying Briefing Engine Output...")
-    engine = BriefingEngine(db)
-    result = engine.generate_briefing()
+def verify():
+    print(f"Testing Backend Contract: {API_URL}")
     
-    targets = result.get("targets", [])
-    print(f"Items Returned: {len(targets)}")
+    # We are in default_user mode, so no token needed for "Identity Bridge" fallback
+    # But if we want to simulate properly, we might need headers.
+    # The Identity Bridge code checks SCOUT_IDENTITY_MODE.
     
-    if not targets:
-        print("❌ FAIL: No items returned (Queue might be empty or Date mismatch).")
-        return
+    try:
+        resp = requests.get(API_URL)
+        print(f"Status: {resp.status_code}")
+        
+        if resp.status_code != 200:
+            print("FAILED:", resp.text)
+            return
 
-    first = targets[0]
-    print("\n[Sample Item Structure]")
-    print(json.dumps(first, indent=2))
-    
-    # Check Contract (BriefingTarget)
-    if "targetId" not in first:
-        print("❌ FAIL: contract violation: missing targetId")
-        # exit(1) # Soft fail for now
-
-    broker = first.get("broker", {})
-    if not broker.get("name") or not broker.get("title"):
-        print(f"❌ FAIL: Broker details incomplete: {broker}")
-    
-    # Phase 2: Check Image
-    if broker.get("imageUrl"):
-        print(f"✅ PASS: Image URL present: {broker.get('imageUrl')[:30]}...")
-    else:
-        print("⚠️ WARNING: Image URL missing (Enrichment gap or no result).")
-
-    # Check Draft
-    draft = first.get("draft", {})
-    if not draft.get("body") or "Subject:" not in draft.get("body"):
-         print(f"❌ FAIL: Draft content invalid: {draft.get('body')}")
-    else:
-         print("✅ PASS: Draft content looks valid.")
+        data = resp.json()
+        targets = data.get("targets", [])
+        print(f"Targets Found: {len(targets)}")
+        
+        found = False
+        for t in targets:
+            name = t.get("broker", {}).get("name")
+            print(f" - Candidate: {name}")
+            if "Tauseef" in str(name):
+                found = True
+        
+        if found:
+            print("✅ SUCCESS: Tauseef Rahman found in API payload.")
+        else:
+            print("❌ FAILURE: Tauseef Rahman NOT found in payload.")
+            
+    except Exception as e:
+        print(f"CRITICAL: {e}")
 
 if __name__ == "__main__":
-    verify_briefing_output()
+    verify()

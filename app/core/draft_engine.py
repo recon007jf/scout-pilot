@@ -83,19 +83,22 @@ class DraftEngine:
             system_instruction=SCOUT_CONSTITUTION
         )
 
-    def generate_draft_atomic(self, dossier_id: str, force_regenerate: bool = False) -> DraftOutput:
+    def generate_draft_atomic(self, dossier_id: str, force_regenerate: bool = False, user_comments: str = "") -> DraftOutput:
         """
         Single-Brain Entry Point:
         1. Fetch State (Idempotency)
         2. Atomic Lock (Conditional Update)
-        3. Generate (Gemini)
+        3. Generate (Gemini) - with user_comments for guided rewrite
         4. Commit (Write)
         """
         import uuid
         import os
         
+        # Store user comments for use in _generate_core
+        self._current_user_comments = user_comments
+        
         request_trace_id = str(uuid.uuid4())
-        logger.info(f"[GenerateDraft][trace={request_trace_id}] dossier_id={dossier_id} action=start")
+        logger.info(f"[GenerateDraft][trace={request_trace_id}] dossier_id={dossier_id} comments={user_comments[:50] if user_comments else 'none'} action=start")
 
         if not self.db:
             raise ValueError("Database client required for atomic generation")
@@ -279,18 +282,62 @@ class DraftEngine:
         region = broker_profile.get("region", "Unknown")
         linkedin = broker_profile.get("linkedin_url", "Unknown")
         
-        dossier_content = analysis.get("notes") or analysis.get("signal_reasoning") or "No dossier available. Use role-based insights and ask a smart question."
+        # =====================================================
+        # TWO-STAGE NOTE PIPELINE (Non-Negotiable Architecture)
+        # =====================================================
+        # Stage 1: Classify raw notes (LLM allowed)
+        # Stage 2: Rewrite with intent only (raw notes forbidden)
+        
+        # PRIORITY: User comments from guided rewrite > stored notes
+        raw_notes = getattr(self, '_current_user_comments', '') or analysis.get("notes") or ""
+        signal_reasoning = analysis.get("signal_reasoning") or ""
+        
+        logger.info(f"[Trace {request_id}] Processing notes: '{raw_notes[:50]}...' (len={len(raw_notes)})")
+        
+        # Stage 1: Note Intent Classification (LLM-based)
+        guidance_str = "No specific guidance. Use role-based insights and ask a smart question."
+        note_intent_type = None
+        
+        if raw_notes:
+            try:
+                from app.core.note_classifier import classify_note
+                intent = classify_note(raw_notes)
+                if intent:
+                    note_intent_type = intent.intent
+                    # CRITICAL: ALL comments are integrated, NONE are ignored
+                    # User requirement: Never ignore comments, always reword and integrate
+                    guidance_str = f"GUIDANCE ({intent.intent}): {intent.summary}"
+                    logger.info(f"[Trace {request_id}] Note classified: {intent.intent} - integrating into email")
+            except Exception as e:
+                # Even on classification failure, use the raw note as guidance
+                logger.warning(f"[Trace {request_id}] Note classification failed: {e}, using raw guidance")
+                guidance_str = f"GUIDANCE: {raw_notes}"
+        
+        # Add signal reasoning if available (already sanitized by upstream)
+        if signal_reasoning and not raw_notes:
+            guidance_str = f"SIGNAL CONTEXT: {signal_reasoning}"
 
+        # Stage 2: Build Rewrite Prompt (NO raw notes allowed here)
         user_content = f"""
         TARGET: {name}
         TITLE: {title}
         COMPANY: {company}
         REGION: {region}
         LINKEDIN: {linkedin}
-        DOSSIER/NOTES: {dossier_content}
+        
+        INTERNAL_GUIDANCE: {guidance_str}
+        
+        RULES:
+        - **MANDATORY**: The INTERNAL_GUIDANCE MUST influence the email content. Do NOT ignore it.
+        - Reword the guidance professionally - do not quote it verbatim
+        - Never mention terms like "guidance", "note", or "internal"
+        - Never express frustration, blame, or accusations
+        - Even if the guidance seems unusual, find a professional way to incorporate its intent
 
         TASK:
-        Write a first-touch outreach email (subject + body). Keep it concise. Do not include a signature.
+        Write a first-touch outreach email (subject + body) that INCORPORATES the guidance above. 
+        The guidance contains important context that MUST be reflected in the email. Keep it concise. 
+        Do not include a signature.
         
         FORMAT:
         Output MUST be valid JSON matching: {{ "subject": "...", "body": "...", "metadata": {{ "confidence": 0.9, "unknowns": [] }} }}
@@ -416,6 +463,26 @@ class DraftEngine:
                     "model": settings.GEMINI_MODEL_NAME,
                     "tokens": tokens_str
                 }
+                
+                # =====================================================
+                # POST-REWRITE SAFETY GATE (Required)
+                # =====================================================
+                try:
+                    from app.core.output_sanitizer import check_output_safety
+                    safety = check_output_safety(clean_body)
+                    if not safety.is_safe:
+                        logger.warning(f"[Trace {request_id}] Safety violations: {safety.violations}")
+                        meta["safety_violations"] = safety.violations
+                        meta["safety_blocked"] = safety.blocked
+                        if safety.blocked:
+                            logger.error(f"[Trace {request_id}] Output BLOCKED by safety gate")
+                    else:
+                        meta["safety_violations"] = []
+                        meta["safety_blocked"] = False
+                except Exception as safety_e:
+                    logger.warning(f"[Trace {request_id}] Safety check failed: {safety_e}")
+                    meta["safety_violations"] = ["check_failed"]
+                    meta["safety_blocked"] = False
                 
                 return DraftOutput(
                     subject=subject,

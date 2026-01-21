@@ -14,6 +14,12 @@ class BriefingEngine:
         New Architecture (Jan 17):
         Reads pre-selected candidates from 'morning_briefing_queue'.
         NO runtime selection. NO runtime generation.
+
+        [TECHNICAL DEBT - JAN 21]
+        The 'morning_briefing_queue' table lacks an 'owner_id' column to enforce multi-tenant isolation.
+        We rely implicitly on the upstream 'Baker' process to only generate queue items
+        for the active user context. This is safe for single-tenant (Phase 3) but must be 
+        migrated before multi-tenant rollout (Option B).
         """
         briefing_targets = []
         tier_counts = {"Warm": 0, "Cold-Safe": 0, "High-Risk": 0}
@@ -81,7 +87,7 @@ class BriefingEngine:
                     },
                     "signals": [],  # Empty for Phase 1
                     "draft": {
-                        "subject": (candidate.get("draft_body") or "Subject: Connect").split("\n")[0],
+                        "subject": candidate.get("draft_subject") or (candidate.get("draft_body") or "Subject: Connect").split("\n")[0],
                         "body": candidate.get("draft_body") or item.get("draft_preview") or "",
                         "generatedAt": item.get("created_at"),
                         "version": 1

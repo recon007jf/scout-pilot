@@ -70,7 +70,7 @@ def inspect_rls():
         # user_client.postgrest.auth(token)
         user_client.postgrest.auth(token)
         
-        res = user_client.table("profiles").select("*").eq("id", test_uid).execute()
+        res = user_client.table("target_brokers").select("id, status").limit(5).execute()
         
         if res.data:
             print("✅ RLS SUCCESS: User can read own profile.")

@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     
     # External APIs
     SERPER_API_KEY: str = ""
+    PDL_API_KEY: str = ""
     GOOGLE_MAPS_SERVER_KEY: str = "" # Formerly "GOOGLE_MAPS_SERVER_KEY", map to existing env var
 
     # Safety Latch (P0.3)

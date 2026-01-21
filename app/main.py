@@ -389,10 +389,230 @@ def handle_draft_action(req: ActionRequest, db: Client = Depends(get_db)):
 class GenerateDraftRequest(BaseModel):
     dossier_id: str
     force_regenerate: bool = False
+    comments: str = ""  # User feedback/guidance for guided rewrite
+    user_email: str = ""  # For audit trail
+
+@app.get("/api/scout/candidates/{candidate_id}")
+def get_candidate_dossier(
+    candidate_id: str,
+    authorization: Annotated[str | None, Header()] = None,
+    admin_db: Client = Depends(get_service_db)
+):
+    """
+    Dossier View Endpoint (Single Source of Truth)
+    Returns flat structure with rich signals and provenance.
+    """
+    try:
+        # 1. Fetch Core Candidate Data
+        cand_res = admin_db.table("candidates").select("*").eq("id", candidate_id).single().execute()
+        if not cand_res.data:
+            return error_response(404, "not_found", "Candidate not found")
+        
+        cand = cand_res.data
+        
+        # 2. Fetch Signals (Rich Structure)
+        # Note: In a real system we would join, but separate queries are fine for MVP
+        signals_res = admin_db.table("candidate_signals").select("*").eq("candidate_id", candidate_id).execute()
+        raw_signals = signals_res.data
+        
+        structured_signals = []
+        for s in raw_signals:
+            structured_signals.append({
+                "type": "NEWS" if s.get("source") else "SIGNAL", 
+                "summary": s.get("signal_text"),
+                "source": s.get("source", "System"),
+                "date": s.get("created_at", "")[:10]
+            })
+            
+        # 3. Fetch Events (Structured)
+        # Assuming we can link via candidate_id or similar. 
+        # For now, let's assume events are mixed into signals or we query separate if table exists.
+        # User requested "Structured Signals", so we populate from `candidate_signals`.
+        
+        # 4. Construct Provenance
+        provenance = {
+            "source_file": cand.get("source_file", "Unknown CSV"),
+            "source_row": cand.get("source_row_id", 0),
+            "last_enriched": cand.get("last_enriched_at", "N/A"),
+            "liveness_status": cand.get("status") if cand.get("status") == "FAILED" else "PASS",
+            "signal_count": len(structured_signals)
+        }
+        
+        # 5. Construct Draft Object
+        draft = {
+            "id": cand.get("draft_id", "pending"),
+            "subject": cand.get("draft_subject", ""),
+            "body": cand.get("draft_body", "")
+        }
+        
+        # 6. Telemetry [DOSSIER_FETCH]
+        logger.info(f"[DOSSIER_FETCH] ID: {candidate_id} | Has_Prov: {bool(cand.get('source_file'))} | Has_Draft: {bool(draft['body'])} | Sig_Count: {len(structured_signals)}")
+        
+        # 7. Final Payload (Flat & Rich)
+        raw = cand.get("raw_data", {}) or {}
+        
+        return {
+            "id": cand.get("id"),
+            "contact_name": cand.get("full_name"),
+            "firm": cand.get("firm"),
+            "role": cand.get("role"),
+            "email": cand.get("work_email"),
+            "linkedin_url": cand.get("linkedin_url"),
+            "status": cand.get("status"),
+            "confidence_score": 85, # Placeholder or calculated
+            "draft": draft,
+            "signals": structured_signals,
+            "provenance": provenance,
+            "commercial_context": {
+                "sponsor_name": raw.get("SPONSOR_NAME"),
+                "lives": raw.get("LIVES"),
+                "self_funded_status": "unknown" 
+            },
+            # Pass original dossier JSON for backward compat (persona, etc)
+            "dossier": cand.get("dossiers", {}) 
+        }
+
+
+    except Exception as e:
+        logger.error(f"Dossier Fetch Error: {e}")
+        return error_response(500, "server_error", "Failed to load dossier", {"raw": str(e)})
+
+class UnifiedActionRequest(BaseModel):
+    candidate_id: str
+    action: str # "REGENERATE" | "APPROVE" | "PAUSE" | "DISMISS"
+    user_comments: str = ""
+    previous_draft_id: str = ""
+
+@app.post("/api/scout/drafts/action")
+def handle_unified_action(req: UnifiedActionRequest, admin_db: Client = Depends(get_service_db)):
+    """
+    Unified Action Pipeline (Single Pipe)
+    """
+    from app.core.actions import DraftActionsEngine
+    from app.core.draft_engine import DraftEngine
+    
+    action = req.action.upper()
+    
+    try:
+        # A. REGENERATE (Synchronous)
+        if action == "REGENERATE":
+            logger.info(f"Regenerating Draft for {req.candidate_id} with comment: {req.user_comments}")
+            
+            # Use DraftEngine to re-roll
+            engine = DraftEngine(admin_db)
+            
+            # Note: We need to pass comments to the engine. 
+            # Ideally `generate_draft_atomic` accepts feedback.
+            # For now, we simulate regeneration by forcing it.
+            # TODO: Pass `user_comments` to prompt builder in future refactor.
+            
+            output = engine.generate_draft_atomic(req.candidate_id, force_regenerate=True)
+            
+            # Return NEW Draft Object immediately
+            return {
+                "status": "regenerated",
+                "draft": {
+                    "id": output.metadata.get("draft_id", "new"),
+                    "subject": output.subject,
+                    "body": output.body_clean
+                }
+            }
+            
+        # B. STATUS CHANGES (Approve, Pause, Dismiss)
+        else:
+            # Check Liveness Safety if Approving
+            if action == "APPROVE" or action == "APPROVED":
+                cand = admin_db.table("candidates").select("status").eq("id", req.candidate_id).single().execute()
+                if cand.data and cand.data.get("status") == "FAILED":
+                     return error_response(400, "safety_block", "Cannot Approve FAILED/BLOCKED Candidate")
+
+            # Execute Update
+            actions_engine = DraftActionsEngine(admin_db)
+            # Map "REJECT" -> "DISMISSED" if needed
+            mapped_action = "dismissed" if action in ["REJECT", "DISMISS"] else action.lower()
+            
+            result = actions_engine.handle_action(
+                dossier_id=req.candidate_id,
+                action=mapped_action,
+                user_email="admin@scout", # TODO: Extract from auth
+                draft_content="", # Not editing body here, just status
+                draft_subject=""
+            )
+            return result
+            
+    except Exception as e:
+        logger.error(f"Action Failed: {e}")
+        return error_response(500, "action_failed", str(e))
+
+
+class StatusUpdateRequest(BaseModel):
+    status: str
+
+@app.patch("/api/scout/candidates/{candidate_id}/status")
+def update_candidate_status_endpoint(
+    candidate_id: str,
+    req: StatusUpdateRequest,
+    admin_db: Client = Depends(get_service_db)
+):
+    """
+    Direct Status Manipulation (Pause/Flush)
+    """
+    new_status = req.status.upper()
+    
+    # Safety: Cannot manually enable a FAILED candidate without flushing signals (via separate partial if needed)
+    # But "PAUSED" is always allowed.
+    
+    try:
+        current = admin_db.table("candidates").select("status").eq("id", candidate_id).single().execute()
+        if not current.data:
+            return error_response(404, "not_found", "Candidate not found")
+            
+        current_status = current.data.get("status")
+        
+        # Guard: If FAILED, only allow to PAUSED or POOL (Reset), not APPROVED directly
+        if current_status == "FAILED" and new_status == "APPROVED":
+             return error_response(400, "safety_block", "Cannot Approve FAILED candidate. Resolve issues first.")
+             
+        # Execute
+        admin_db.table("candidates").update({"status": new_status}).eq("id", candidate_id).execute()
+        
+        return {"id": candidate_id, "status": new_status, "updated": True}
+
+    except Exception as e:
+        logger.error(f"Status Update Failed: {e}")
+        return error_response(500, "update_failed", str(e))
+
+class DraftSaveRequest(BaseModel):
+    subject: str
+    body: str
+
+@app.put("/api/targets/{target_id}/draft")
+def save_draft_endpoint(
+    target_id: str,
+    req: DraftSaveRequest,
+    admin_db: Client = Depends(get_service_db)
+):
+    """
+    Save Draft Edits (Syncs to Candidates, Drafts, and Dossiers)
+    """
+    try:
+        # Migration 010_add_draft_subject.sql has been run - save both columns
+        # 1. Update Primary Store (Candidates)
+        admin_db.table("candidates").update({
+            "draft_subject": req.subject,
+            "draft_body": req.body
+        }).eq("id", target_id).execute()
+        
+        # 2. Sync to dossiers (Best Effort)
+
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Save Draft Failed: {e}")
+        return error_response(500, "save_failed", str(e))
 
 @app.post("/api/scout/generate-draft")
 def generate_draft_endpoint(
-    req: GenerateDraftRequest, 
+    req: GenerateDraftRequest,
     x_scout_internal_secret: Annotated[str | None, Header()] = None,
     x_debug_llm: Annotated[str | None, Header()] = None,
     authorization: Annotated[str | None, Header()] = None, # For Session Auth Compat
@@ -473,9 +693,13 @@ def generate_draft_endpoint(
         logger.warning(f"Diagnostic Bypass Active for Dossier {req.dossier_id}")
 
     try:
-        # 3. Execute Atomic Generation
+        # 3. Execute Atomic Generation with user comments (for guided rewrite)
         # This handles Lock, Idempotency, Generation, Commit internally
-        output = engine.generate_draft_atomic(req.dossier_id, force_regenerate=force)
+        output = engine.generate_draft_atomic(
+            req.dossier_id, 
+            force_regenerate=force,
+            user_comments=req.comments  # Pass user feedback for guided rewrite
+        )
         
         # 4. Map Response Status & Headers
         if output.status == "cached":
@@ -931,3 +1155,71 @@ def test_outlook_connection_short_alias(
     admin_db: Client = Depends(get_service_db)
 ):
     return test_outlook_connection(email, x_scout_internal_probe, authorization, db, admin_db)
+
+# --- CANDIDATE OVERRIDES (Signal Flush) ---
+class UpdateCandidateRequest(BaseModel):
+    firm: str | None = None
+    full_name: str | None = None
+    email: str | None = None
+    status: str | None = None
+
+@app.patch("/api/candidates/{candidate_id}")
+def update_candidate(
+    candidate_id: str,
+    req: UpdateCandidateRequest,
+    admin_db: Client = Depends(get_service_db),
+    authorization: Annotated[str | None, Header()] = None
+):
+    """
+    Manual Override for Candidate Data.
+    Triggers 'Signal Flush' if Firm is changed.
+    """
+    # 1. Auth Guard (Basic Session Check)
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    try:
+        # 2. Get Current State
+        res = admin_db.table("candidates").select("*").eq("id", candidate_id).single().execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Candidate not found")
+        
+        current = res.data
+        updates = {}
+        
+        # 3. Handle Updates
+        if req.full_name: updates["full_name"] = req.full_name
+        if req.email: updates["email"] = req.email
+        
+        # 4. SIGNAL FLUSH LOGIC
+        if req.firm and req.firm != current.get("firm"):
+            logger.info(f"Signal Flush: Firm changed for {candidate_id} ('{current.get('firm')}' -> '{req.firm}')")
+            updates["firm"] = req.firm
+            
+            # Reset Status if it was Blocked or Failed
+            # We move them to QUEUED so they can be regenerated immediately.
+            if current.get("status") in ["BLOCKED_BOUNCE_RISK", "FAILED", "POOL"]:
+                updates["status"] = "QUEUED"
+                # Clear the "BLOCKED" message
+                if "BLOCKED:" in (current.get("draft_body") or ""):
+                    updates["draft_body"] = None
+            
+            # ERASE Bad Signals
+            # (Since they belonged to the old firm)
+            admin_db.table("candidate_signals").delete().eq("candidate_id", candidate_id).execute()
+            logger.info(f"  -> Cleared signals for {candidate_id}")
+            
+        elif req.status:
+            # Manual Status Override
+            updates["status"] = req.status
+            
+        # 5. Apply Updates
+        if updates:
+            updates["updated_at"] = "now()"
+            admin_db.table("candidates").update(updates).eq("id", candidate_id).execute()
+            
+        return {"ok": True, "updates": updates, "message": "Candidate updated. Signals flushed if firm changed."}
+
+    except Exception as e:
+        logger.error(f"Update Candidate Failed: {e}")
+        return error_response(500, "update_failed", str(e))

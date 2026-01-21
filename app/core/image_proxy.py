@@ -11,6 +11,26 @@ class ImageProxyEngine:
     def __init__(self):
         self.api_key = settings.SERPER_API_KEY
 
+    
+    def verify_accessibility(self, url: str) -> bool:
+        """
+        Verifies if the URL is accessible (200 OK) via a standard HEAD/GET request.
+        """
+        try:
+            # Use Browser User-Agent to avoid anti-bot blocks
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+            # Use stream=True to avoid downloading large files, just check headers
+            r = requests.get(url, headers=headers, stream=True, timeout=3)
+            if r.status_code == 200:
+                # Check Content-Type is image
+                if "image" in r.headers.get("Content-Type", ""):
+                    return True
+            return False
+        except:
+            return False
+
     def fetch_image(self, name: str, company: str, linkedin_url: Optional[str] = None) -> Dict[str, Any]:
         """
         Retrieves profile image using Serper Google Image Search (Jan 17 Production Protocol).
@@ -22,6 +42,7 @@ class ImageProxyEngine:
            - Width & Height >= 100px
            - Aspect Ratio between 0.8 and 1.2 (Square-ish)
            - Domain: Allow media.licdn.com (CDN), Block www.linkedin.com (Auth Wall)
+           - [NEW] Accessibility Check: Must return 200 OK.
         """
         if not self.api_key:
             logger.warning("SERPER_API_KEY is not set.")
@@ -67,16 +88,24 @@ class ImageProxyEngine:
                 if not (0.8 <= ratio <= 1.2):
                     continue
                     
-                # 3. Domain Safety
-                # User Rule: "Does NOT come from linkedin.com (blocked)"
-                # But allow Cached CDNs (media.licdn.com, gstatic, etc.)
-                if "linkedin.com" in link and "media.licdn.com" not in link:
+                # 3. Domain STRICT SAFETY (LinkedIn CDN Only)
+                # We only want official profile photos. 
+                # Blocking random websites (arizent, businessinsurance, etc) that Google finds.
+                # Valid Domains: media.licdn.com
+                if "licdn.com" not in link:
+                    # Reject non-LinkedIn sources
+                    continue
+                    
+                # 4. Success Check (NEW)
+                # Verify URL is actually reachable
+                if not self.verify_accessibility(link):
+                    logger.warning(f"Image blocked/broken: {link}")
                     continue
                     
                 # Success!
                 return {"imageUrl": link, "source": img.get("source", "serper_images")}
             
-            return {"imageUrl": None, "reason": "No matching images after filtering"}
+            return {"imageUrl": None, "reason": "No valid licdn.com images found"}
 
         except Exception as e:
             logger.error(f"Serper Image API Failed: {e}")
